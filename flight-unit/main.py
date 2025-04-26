@@ -4,6 +4,7 @@
 import machine
 from time import ticks_ms, ticks_diff, sleep_ms
 from micropyGPS import MicropyGPS
+from math import sqrt
 
 # SD card setup
 import sdcard
@@ -43,6 +44,12 @@ SEA_LEVEL_TEMP_K = 288.15       # K
 ELEVATION_FT = 440
 ELEVATION_M = ELEVATION_FT * 0.3048
 
+# Calibration for zero offset
+zero_offset = 0
+calibration_readings = []
+calibration_count = 5
+calibrated = False
+
 def pressure_at_elevation(elevation_m):
     L = 0.0065
     R = 8.31447
@@ -72,18 +79,14 @@ def raw_to_pressure_pa(pressure_raw):
     psi = (pressure_raw - 1638) * (1.0 / (14745 - 1638))
     return psi * 6894.76
 
-# Remove raw_to_temp_c and use onboard temperature sensor instead
-
-def airspeed_from_pressures(pitot_pa, static_pa):
+def airspeed_from_pressures(pressure_diff_pa):
     # Calculate airspeed in m/s from differential pressure
-    # v = sqrt(2 * (pitot_pa - static_pa) / rho)
+    # v = sqrt(2 * dp / rho)
     # Assume rho = 1.225 kg/m^3 (sea level, 15°C)
+    if pressure_diff_pa is None or pressure_diff_pa < 0:
+        return 0
     rho = 1.225
-    dp = pitot_pa - static_pa
-    if dp < 0:
-        dp = 0
-    from math import sqrt
-    return sqrt(2 * dp / rho)
+    return sqrt(2 * pressure_diff_pa / rho)
 
 # Function to read onboard temperature sensor (RP2040)
 def read_onboard_temp_c():
@@ -100,8 +103,9 @@ def read_onboard_temp_c():
 gps_buffer = b""
 last_print = ticks_ms()
 last_save = ticks_ms()
-csv_file_path = "/sd/data_log.csv"
-csv_header = "time,latitude,longitude,elevation,airspeed,temp,satellites\n"
+csv_file_path = "/sd/drive.csv"
+# Add milliseconds timestamp to CSV header
+csv_header = "time,timestamp_ms,latitude,longitude,elevation,airspeed,pressure_diff,temp,satellites\n"
 
 # Setup LED for blink on write
 led = machine.Pin("LED", machine.Pin.OUT)
@@ -113,6 +117,24 @@ try:
 except OSError:
     with open(csv_file_path, "w") as f:
         f.write(csv_header)
+
+# Perform calibration
+print("Calibrating pitot sensor... Keep at rest.")
+while not calibrated:
+    try:
+        pitot_data = i2c.readfrom(PITOT_ADDR, 4)
+        pressure_raw, _ = parse_pitot_data(pitot_data)
+        if pressure_raw is not None:
+            pressure_pa = raw_to_pressure_pa(pressure_raw)
+            calibration_readings.append(pressure_pa)
+            print("Calibration reading {}: {:.2f} Pa".format(len(calibration_readings), pressure_pa))
+            if len(calibration_readings) >= calibration_count:
+                zero_offset = sum(calibration_readings) / len(calibration_readings)
+                calibrated = True
+                print("Calibration complete. Zero offset: {:.2f} Pa".format(zero_offset))
+    except Exception as e:
+        print("Calibration error:", e)
+    sleep_ms(100)
 
 while True:
     # --- GPS update ---
@@ -126,11 +148,20 @@ while True:
         pitot_data = i2c.readfrom(PITOT_ADDR, 4)
         pressure_raw, temp_raw = parse_pitot_data(pitot_data)
         pitot_pa = raw_to_pressure_pa(pressure_raw) if pressure_raw is not None else None
-        # temp_c = raw_to_temp_c(temp_raw) if temp_raw is not None else None  # Remove this line
-        airspeed = airspeed_from_pressures(pitot_pa, STATIC_PRESSURE_PA) if pitot_pa is not None else None
+        
+        # Apply zero offset calibration
+        if pitot_pa is not None:
+            pitot_pa -= zero_offset
+            
+        # Calculate pressure difference directly
+        pressure_diff = pitot_pa if pitot_pa is not None else None
+        
+        # Calculate airspeed directly from pressure difference
+        airspeed = airspeed_from_pressures(pressure_diff) if pressure_diff is not None else None
     except Exception as e:
+        print("Pitot read error:", e)
         pitot_pa = None
-        # temp_c = None  # Remove this line
+        pressure_diff = None
         airspeed = None
 
     # --- Onboard temperature read ---
@@ -174,6 +205,9 @@ while True:
 
     airspeed_str = "{:.2f} m/s".format(airspeed) if airspeed is not None else "N/A"
     airspeed_csv = "{:.2f}".format(airspeed) if airspeed is not None else ""
+    # Add pressure_diff string/csv
+    pressure_diff_str = "{:.2f} Pa".format(pressure_diff) if pressure_diff is not None else "N/A"
+    pressure_diff_csv = "{:.2f}".format(pressure_diff) if pressure_diff is not None else ""
     temp_str = "{:.2f} C".format(temp_c) if temp_c is not None else "N/A"
     temp_csv = "{:.2f}".format(temp_c) if temp_c is not None else ""
 
@@ -181,23 +215,21 @@ while True:
     num_sats = my_gps.satellites_in_use if hasattr(my_gps, "satellites_in_use") and my_gps.satellites_in_use is not None else "N/A"
     num_sats_csv = str(num_sats) if num_sats != "N/A" else ""
 
-    print("Time: {} | Lat: {} | Lon: {} | Elevation: {} | Airspeed: {} | Temp: {} | Sats: {}".format(
-        gps_time, lat, lon, elevation_str, airspeed_str, temp_str, num_sats
-    ))
-
-    # --- Save to CSV once per second ---
+    # --- Save to CSV five times per second (every 200ms) ---
     now = ticks_ms()
-    if ticks_diff(now, last_save) >= 1000:
-        # Compose CSV line
-        csv_line = "{},{},{},{},{},{},{}\n".format(
-            gps_time, lat_csv, lon_csv, elevation_csv, airspeed_csv, temp_csv, num_sats_csv
+    if ticks_diff(now, last_save) >= 200:
+        # Get current timestamp in milliseconds
+        timestamp_ms = now
+        # Compose CSV line with timestamp in milliseconds
+        csv_line = "{},{},{},{},{},{},{},{},{}\n".format(
+            gps_time, timestamp_ms, lat_csv, lon_csv, elevation_csv, airspeed_csv, pressure_diff_csv, temp_csv, num_sats_csv
         )
         try:
             with open(csv_file_path, "a") as f:
                 f.write(csv_line)
-            # Blink LED for 100ms to indicate data written
+            # Blink LED for 50ms to indicate data written (shorter to accommodate faster writes)
             led.on()
-            sleep_ms(100)
+            sleep_ms(50)
             led.off()
         except Exception as e:
             print("SD write error:", e)
