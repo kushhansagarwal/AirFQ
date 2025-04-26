@@ -1,12 +1,18 @@
 from flask import Flask, request, jsonify, send_file, make_response
 import os
-from main import generate_wind_plots
+from main import generate_wind_plots, generate_wind_plots_augmented
 import tempfile
 from werkzeug.utils import secure_filename
-from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+
+@app.after_request
+def after_request(response):
+    # Allow CORS from anywhere
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
+    return response
 
 @app.route('/wind-data', methods=['POST'])
 def get_wind_data():
@@ -48,22 +54,77 @@ def get_wind_data():
                 as_attachment=True,
                 download_name=os.path.basename(plot_file)
             ))
-            # Add CORS headers explicitly (in case CORS(app) is not enough)
-            response.headers['Access-Control-Allow-Origin'] = '*'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
-            response.headers['Access-Control-Allow-Methods'] = 'POST,OPTIONS'
+            # CORS headers are set globally in after_request
             return response
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.after_request
-def after_request(response):
-    # Ensure CORS headers are set for all responses
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
-    response.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
-    return response
+@app.route('/wind-data-augmented', methods=['POST'])
+def get_wind_data_augmented():
+    # Accept both JSON and form data for flexibility
+    if request.is_json:
+        data = request.get_json()
+    else:
+        data = request.form.to_dict()
+
+    # Validate input
+    required_params = ['departure', 'arrival', 'level']
+    if not data or not all(param in data for param in required_params):
+        return jsonify({'error': f'Missing required parameters: {", ".join(required_params)}'}), 400
+
+    # Set default values for magnitude_factor and angle_factor if not provided
+    magnitude_factor = data.get('magnitude_factor', 1.5)
+    angle_factor = data.get('angle_factor', 2)
+        
+    departure = data['departure']
+    arrival = data['arrival']
+    level = data['level']
+    
+    # Convert and validate magnitude_factor and angle_factor
+    try:
+        magnitude_factor = float(magnitude_factor)
+        angle_factor = float(angle_factor)
+        
+        if magnitude_factor <= 0:
+            return jsonify({'error': 'magnitude_factor must be positive'}), 400
+            
+    except ValueError:
+        return jsonify({'error': 'Invalid magnitude_factor or angle_factor format'}), 400
+
+    # Accept level as a string, or as an int (convert to string with leading zeros)
+    if isinstance(level, int):
+        level = f"{level:03d}"
+    elif isinstance(level, str):
+        level = level.zfill(3)
+    else:
+        return jsonify({'error': 'Invalid level format'}), 400
+
+    try:
+        # Create a temporary directory to store the plot
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Generate augmented plot for the requested level
+            plot_files = generate_wind_plots_augmented(
+                departure, arrival, [level], temp_dir,
+                magnitude_factor, angle_factor
+            )
+            
+            if not plot_files or not os.path.exists(plot_files[0]):
+                return jsonify({'error': 'Failed to generate augmented wind plot'}), 500
+
+            plot_file = plot_files[0]
+            # Send the SVG file
+            response = make_response(send_file(
+                plot_file,
+                mimetype='image/svg+xml',
+                as_attachment=True,
+                download_name=os.path.basename(plot_file)
+            ))
+            # CORS headers are set globally in after_request
+            return response
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/', methods=['GET'])
 def index():
@@ -80,14 +141,25 @@ def index():
                         'level': 'Flight level (e.g., "030" or 30)'
                     },
                     'returns': 'SVG image file'
+                },
+                'wind-data-augmented': {
+                    'method': 'POST',
+                    'parameters': {
+                        'departure': 'ICAO airport code (e.g., KSMO)',
+                        'arrival': 'ICAO airport code (e.g., KJFK)',
+                        'level': 'Flight level (e.g., "030" or 30)',
+                        'magnitude_factor': 'Factor to multiply wind speeds (e.g., 1.5)',
+                        'angle_factor': 'Factor to add to wind direction proportional to speed (e.g., 0.5)'
+                    },
+                    'returns': 'SVG image file with both original and augmented winds'
                 }
             }
         })
-        response.headers['Access-Control-Allow-Origin'] = '*'
+        # CORS headers are set globally in after_request
         return response
     except Exception as e:
         app.logger.error(f"Error in index route: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000, host='0.0.0.0')
+    app.run(debug=True, port=3001, host='0.0.0.0')
