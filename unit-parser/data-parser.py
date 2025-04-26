@@ -2,8 +2,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import contextily as ctx
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, Normalize
 import matplotlib.patheffects as pe
+from matplotlib.collections import LineCollection
 
 # Read the CSV file, skipping any blank lines
 df = pd.read_csv('airspeed.csv', skip_blank_lines=True)
@@ -122,23 +123,46 @@ for i in range(1, len(df)):
 df['estimated_lat'] = estimated_lats
 df['estimated_lon'] = estimated_lons
 
-# Plot the GPS track on a street map
-fig, ax = plt.subplots(figsize=(12, 12), dpi=150)
+# Plot the GPS track on a street map with airspeed as a heatmap
+fig, ax = plt.subplots(figsize=(16, 16), dpi=300)  # Increased resolution
 
 # Plot the raw GPS data as a thin line
 ax.plot(df['longitude'], df['latitude'], '-', color='red', linewidth=1, alpha=0.7, 
         label='Raw GPS', path_effects=[pe.Stroke(linewidth=2, foreground='white'), pe.Normal()])
 
-# Plot the smoothed route with a thicker line
-ax.plot(df['lon_smooth'], df['lat_smooth'], '-', color='blue', linewidth=2.5, 
-        label='Smoothed Path (15-point avg)', path_effects=[pe.Stroke(linewidth=3.5, foreground='white'), pe.Normal()])
+# Plot the smoothed route as a heatmap line based on airspeed
+# Prepare segments for LineCollection
+points = np.array([df['lon_smooth'], df['lat_smooth']]).T.reshape(-1, 1, 2)
+segments = np.concatenate([points[:-1], points[1:]], axis=1)
+
+# Use airspeed for color mapping, drop NaN for color array
+airspeed_for_color = df['airspeed'].rolling(window=15, min_periods=1).mean().values
+airspeed_for_color = (airspeed_for_color[:-1] + airspeed_for_color[1:]) / 2  # average for each segment
+
+norm = Normalize(vmin=np.nanmin(airspeed_for_color), vmax=np.nanmax(airspeed_for_color))
+cmap = plt.get_cmap('viridis')
+
+lc = LineCollection(segments, cmap=cmap, norm=norm, linewidth=2.5, alpha=1.0,
+                    path_effects=[pe.Stroke(linewidth=3.5, foreground='white'), pe.Normal()])
+lc.set_array(airspeed_for_color)
+line = ax.add_collection(lc)
+
+# Add colorbar for airspeed
+cbar = plt.colorbar(line, ax=ax, orientation='vertical', pad=0.01)
+cbar.set_label('Airspeed (m/s)')
 
 # Plot the estimated route
-ax.plot(df['estimated_lon'], df['estimated_lat'], '-', color='green', linewidth=2, 
-        label='Estimated Path (from speed/track)', path_effects=[pe.Stroke(linewidth=3, foreground='white'), pe.Normal()])
+# ax.plot(df['estimated_lon'], df['estimated_lat'], '-', color='green', linewidth=2, 
+#         label='Estimated Path (from speed/track)', path_effects=[pe.Stroke(linewidth=3, foreground='white'), pe.Normal()])
 
-# Add basemap
-ctx.add_basemap(ax, crs='EPSG:4326', source=ctx.providers.OpenStreetMap.Mapnik)
+# Add basemap with higher darkness and higher resolution
+ctx.add_basemap(
+    ax,
+    crs='EPSG:4326',
+    source=ctx.providers.CartoDB.DarkMatter,  # Use a dark basemap for higher darkness
+    attribution_size=8,
+    zoom=16  # Increase zoom for higher resolution (default is 12)
+)
 
 # Set plot limits with a small buffer
 buffer = 0.0005  # Adjust as needed
@@ -148,7 +172,7 @@ ax.set_xlim(min_lon, max_lon)
 ax.set_ylim(min_lat, max_lat)
 
 # Add title and legend
-ax.set_title('GPS Track with Smoothed and Estimated Paths', fontsize=14)
+ax.set_title('GPS Track with Airspeed Heatmap and Estimated Path', fontsize=14)
 ax.legend(loc='upper right', frameon=True, framealpha=0.9)
 
 # Remove axis labels as they're not needed with the map
@@ -156,7 +180,7 @@ ax.set_xlabel('')
 ax.set_ylabel('')
 
 plt.tight_layout()
-plt.savefig('gps_track_map.png', dpi=150, bbox_inches='tight')
+plt.savefig('gps_track_map.png', dpi=300, bbox_inches='tight')  # Increased dpi
 
 # Calculate the difference between airspeed and ground speed
 df['speed_difference'] = df['airspeed'] - df['ground_speed_mps']
@@ -165,35 +189,42 @@ df['speed_difference'] = df['airspeed'] - df['ground_speed_mps']
 start_time = df['time_sec'].min()
 df['time_sec_normalized'] = df['time_sec'] - start_time
 
-# Create a time series plot for airspeed, ground speed, and their difference (all as rolling averages)
-plt.figure(figsize=(12, 8), dpi=150)
+# Create a time series plot for airspeed, ground speed, elevation, and their difference (all as rolling averages)
+plt.figure(figsize=(12, 10), dpi=300)  # Increased dpi
 
 # Set rolling window size
 window_size = 200
 
-# Compute rolling averages for airspeed, ground speed, and their difference
+# Compute rolling averages for airspeed, ground speed, their difference, and elevation
 df['airspeed_avg'] = df['airspeed'].rolling(window=window_size, center=True).mean()
 df['ground_speed_avg'] = df['ground_speed_mps'].rolling(window=window_size, center=True).mean()
 df['speed_difference_avg'] = df['speed_difference'].rolling(window=window_size, center=True).mean()
+if 'elevation' in df.columns:
+    df['elevation_avg'] = df['elevation'].rolling(window=window_size, center=True).mean()
+    df['elevation_avg'] = df['elevation_avg'].fillna(df['elevation'])
+else:
+    df['elevation_avg'] = np.nan  # fallback if no elevation
 
 # Fill NaN values at the beginning and end of the rolling average
 df['airspeed_avg'] = df['airspeed_avg'].fillna(df['airspeed'])
 df['ground_speed_avg'] = df['ground_speed_avg'].fillna(df['ground_speed_mps'])
 df['speed_difference_avg'] = df['speed_difference_avg'].fillna(df['speed_difference'])
 
-# Plot rolling average airspeed and ground speed
-plt.subplot(2, 1, 1)
+# Plot rolling average airspeed, ground speed, and elevation
+plt.subplot(3, 1, 1)
 plt.plot(df['time_sec_normalized'], df['airspeed_avg'], '-', color='blue', label='Airspeed (rolling avg)')
 plt.plot(df['time_sec_normalized'], df['ground_speed_avg'], '-', color='orange', label='Ground Speed (rolling avg)')
+if not df['elevation_avg'].isnull().all():
+    plt.plot(df['time_sec_normalized'], df['elevation_avg'], '-', color='green', label='Elevation (rolling avg)')
 plt.xlabel('Time (seconds from start)')
-plt.ylabel('Speed (m/s)')
-plt.title('Airspeed vs Ground Speed (Rolling Averages)')
+plt.ylabel('Speed (m/s) / Elevation (m)')
+plt.title('Airspeed, Ground Speed, and Elevation (Rolling Averages)')
 plt.grid(True)
 plt.legend()
 
 # Plot the rolling average difference, offsetting by its mean
 mean_diff = df['speed_difference_avg'].mean()
-plt.subplot(2, 1, 2)
+plt.subplot(3, 1, 2)
 plt.plot(
     df['time_sec_normalized'],
     df['speed_difference_avg'] - mean_diff,
@@ -207,6 +238,17 @@ plt.title('Airspeed - Ground Speed (Rolling Average, Mean Offset)')
 plt.grid(True)
 plt.legend()
 
+# Plot elevation alone for clarity if available
+plt.subplot(3, 1, 3)
+if not df['elevation_avg'].isnull().all():
+    plt.plot(df['time_sec_normalized'], df['elevation_avg'], '-', color='green', label='Elevation (rolling avg)')
+    plt.ylabel('Elevation (m)')
+    plt.title('Elevation (Rolling Average)')
+    plt.legend()
+else:
+    plt.text(0.5, 0.5, 'No Elevation Data', ha='center', va='center', fontsize=12)
+plt.xlabel('Time (seconds from start)')
+plt.grid(True)
+
 plt.tight_layout()
-plt.savefig('speed_comparison.png', dpi=150, bbox_inches='tight')
-plt.show()
+plt.savefig('speed_comparison.png', dpi=300, bbox_inches='tight')  # Increased dpi
