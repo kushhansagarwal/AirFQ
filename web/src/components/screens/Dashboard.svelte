@@ -1,68 +1,86 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  
   let departureAirport = '';
   let arrivalAirport = '';
-  let routeImage: string | null = null;
   let isLoading = false;
   let errorMessage = '';
-  
-  // Validation function for airport codes
+  let selectedLevel: string = 'sfc';
+  let svgData: Record<string, string | null> = {
+    sfc: null,
+    '030': null,
+    '060': null,
+    max: null
+  };
+
+  const levels = ['sfc', '030', '060', '090'];
+
   function isValidAirportCode(code: string): boolean {
-    return /^K[A-Z]{3}$/.test(code);
+    return /^[A-Z]{4}$/.test(code);
   }
-  
-  // Function to fetch route image from dummy API
-  async function fetchRouteImage() {
+
+  async function fetchWindSVG(level: string) {
     if (!isValidAirportCode(departureAirport)) {
       errorMessage = 'Departure airport must be a 4-letter code starting with K';
       return;
     }
-    
     if (!isValidAirportCode(arrivalAirport)) {
       errorMessage = 'Arrival airport must be a 4-letter code starting with K';
       return;
     }
-    
     errorMessage = '';
     isLoading = true;
-    routeImage = null;
-    
+    svgData[level] = null;
+
     try {
-      // Simulate API call with a timeout
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // This is a dummy API endpoint - in a real app, you would call your actual API
-      // For demo purposes, we're generating a placeholder image URL
-      const response = await fetch(`https://dummyapi.example/route?from=${departureAirport}&to=${arrivalAirport}`);
-      
+      const response = await fetch('http://127.0.0.1:3001/wind-data-augmented', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          departure: departureAirport,
+          arrival: arrivalAirport,
+          level
+        })
+      });
+
       if (!response.ok) {
-        throw new Error('Failed to fetch route image');
+        throw new Error('Failed to fetch wind data');
       }
-      
-      // In a real implementation, you would get the image URL from the response
-      // For this example, we'll use a placeholder image
-      routeImage = `https://placehold.co/800x600/007bff/white?text=${departureAirport}+to+${arrivalAirport}`;
+
+      const svgText = await response.text();
+      svgData = { ...svgData, [level]: svgText };
     } catch (error) {
-      console.error('Error fetching route:', error);
-      errorMessage = 'Failed to fetch route image. Please try again.';
+      console.error('Error fetching wind data:', error);
+      errorMessage = 'Failed to fetch wind data. Please try again.';
     } finally {
       isLoading = false;
     }
   }
-  
-  // Reset the form
+
+  function handleShowPlot(level: string) {
+    selectedLevel = level;
+    if (!svgData[level]) {
+      fetchWindSVG(level);
+    }
+  }
+
   function resetForm() {
     departureAirport = '';
     arrivalAirport = '';
-    routeImage = null;
     errorMessage = '';
+    svgData = {
+      sfc: null,
+      '030': null,
+      '060': null,
+      max: null
+    };
+    selectedLevel = 'sfc';
   }
 </script>
 
 <div class="flex flex-col gap-6">
-  <h1 class="text-4xl font-bold">Flight Route Planner</h1>
-  
+  <h1 class="text-4xl font-bold">Flight Route Wind Plot</h1>
+
   <div class="flex flex-col md:flex-row gap-4">
     <label class="form-control w-full max-w-xs">
       <span class="label-text">Departure Airport</span>
@@ -91,26 +109,38 @@
         <span class="label-text-alt text-error">Must be a 4-letter code starting with K</span>
       {/if}
     </label>
-    
     <div class="form-control">
       <div class="opacity-0 h-6">
         <span>Submit</span>
       </div>
       <button 
-        class="btn btn-primary" 
-        on:click={fetchRouteImage}
+        class="btn btn-primary"
+        on:click={() => handleShowPlot(selectedLevel)}
         disabled={!departureAirport || !arrivalAirport || isLoading || !isValidAirportCode(departureAirport) || !isValidAirportCode(arrivalAirport)}
       >
         {#if isLoading}
           <span class="loading loading-spinner"></span>
           Loading...
         {:else}
-          Show Route
+          Show Wind Plot
         {/if}
       </button>
     </div>
   </div>
-  
+
+  <div class="join my-2">
+    {#each levels as level}
+      <button
+        class="btn join-item {selectedLevel === level ? 'btn-active btn-primary' : ''}"
+        disabled={!departureAirport || !arrivalAirport || isLoading || !isValidAirportCode(departureAirport) || !isValidAirportCode(arrivalAirport)}
+        on:click={() => handleShowPlot(level)}
+        type="button"
+      >
+        {level}
+      </button>
+    {/each}
+  </div>
+
   {#if errorMessage}
     <div class="alert alert-error">
       <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
@@ -119,15 +149,15 @@
       <span>{errorMessage}</span>
     </div>
   {/if}
-  
-  {#if routeImage}
+
+  {#if svgData[selectedLevel]}
     <div class="card bg-base-100 shadow-xl">
       <figure>
-        <img src={routeImage} alt="Flight route from {departureAirport} to {arrivalAirport}" class="w-full" />
+        {@html svgData[selectedLevel]}
       </figure>
       <div class="card-body">
-        <h2 class="card-title">Flight Route: {departureAirport} to {arrivalAirport}</h2>
-        <p>This is a visualization of your selected flight route.</p>
+        <h2 class="card-title">Wind Plot: {departureAirport} to {arrivalAirport} ({selectedLevel})</h2>
+        <p>This is a wind plot for your selected route and flight level.</p>
         <div class="card-actions justify-end">
           <button class="btn btn-secondary" on:click={resetForm}>New Search</button>
         </div>
