@@ -1,65 +1,34 @@
-# Test for sdcard block protocol
-# Peter hinch 30th Jan 2016
 import machine
-import os
 import sdcard
-
-
-def sdtest():
-    spi = machine.SPI(1)
-    spi.init()  # Ensure right baudrate
-    sd = sdcard.SDCard(spi, machine.Pin(12))  # Use correct pin for your board
-    vfs = os.VfsFat(sd)
-    os.mount(vfs, "/fc")
-    print("Filesystem check")
-    print(os.listdir("/fc"))
-
-    line = "abcdefghijklmnopqrstuvwxyz\n"
-    lines = line * 200  # 5400 chars
-    short = "1234567890\n"
-
-    fn = "/fc/rats.txt"
-    print()
-    print("Multiple block read/write")
-    with open(fn, "w") as f:
-        n = f.write(lines)
-        print(n, "bytes written")
-        n = f.write(short)
-        print(n, "bytes written")
-        n = f.write(lines)
-        print(n, "bytes written")
-
-    with open(fn, "r") as f:
-        result1 = f.read()
-        print(len(result1), "bytes read")
-
-    fn = "/fc/rats1.txt"
-    print()
-    print("Single block read/write")
-    with open(fn, "w") as f:
-        n = f.write(short)  # one block
-        print(n, "bytes written")
-
-    with open(fn, "r") as f:
-        result2 = f.read()
-        print(len(result2), "bytes read")
-
-    os.umount("/fc")
-
-    print()
-    print("Verifying data read back")
-    success = True
-    if result1 == "".join((lines, short, lines)):
-        print("Large file Pass")
-    else:
-        print("Large file Fail")
-        success = False
-    if result2 == short:
-        print("Small file Pass")
-    else:
-        print("Small file Fail")
-        success = False
-    print()
-    print("Tests", "passed" if success else "failed")
-
-sdtest()
+import uos
+ 
+# Assign chip select (CS) pin (and start it high)
+cs = machine.Pin(1, machine.Pin.OUT)
+ 
+# Intialize SPI peripheral (start with 1 MHz)
+spi = machine.SPI(0,
+                  baudrate=1000000,
+                  polarity=0,
+                  phase=0,
+                  bits=8,
+                  firstbit=machine.SPI.MSB,
+                  sck=machine.Pin(2),
+                  mosi=machine.Pin(3),
+                  miso=machine.Pin(4))
+ 
+# Initialize SD card
+sd = sdcard.SDCard(spi, cs)
+ 
+# Mount filesystem
+vfs = uos.VfsFat(sd)
+uos.mount(vfs, "/sd")
+ 
+# Create a file and write something to it
+with open("/sd/test01.txt", "w") as file:
+    file.write("Hello, SD World!\r\n")
+    file.write("This is a test\r\n")
+ 
+# Open the file we just created and read from it
+with open("/sd/test01.txt", "r") as file:
+    data = file.read()
+    print(data)
