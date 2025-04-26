@@ -1,0 +1,54 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage{geometry}
+
+\geometry{margin=1in}
+
+\title{Air Quality Monitoring Report}
+\author{Your Name}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report presents an analysis of air quality measurements collected from various monitoring stations. The data include concentrations of major pollutants, meteorological conditions, and temporal patterns. Our findings indicate significant variations in air quality across different locations and time periods, with implications for public health and environmental policy.
+\end{abstract}
+
+\section{Augmentation of Weather Forecasts Using Real-Time Observations}
+
+\subsection{Problem Definition}
+Traditional weather models rely on predictive numerical methods initialized with historical and interpolated observations. However, their accuracy diminishes over time due to inherent uncertainties. Real-time observational data collected from reporting aircraft offer opportunities to recalibrate and augment forecasts dynamically.
+
+\subsection{Mathematical Formulation}
+Let $\hat{x}_t$ denote the initial forecast for variable $x$ (wind speed, temperature, humidity) at time $t$, and let $y_t$ be the real-time observational measurement from an aircraft at the same location and time. The augmented forecast $x'_t$ can be formulated as:
+
+\begin{equation}
+x'_t = \hat{x}_t + K_t(y_t - \hat{x}_t)
+\end{equation}
+
+where $K_t$ is the Kalman gain, determined dynamically by:
+
+\begin{equation}
+K_t = \frac{P_t}{P_t + R}
+\end{equation}
+
+Here, $P_t$ represents the forecast error covariance, and $R$ represents the observational error covariance.
+
+\subsection{Implementation and Application}
+This method is applied sequentially whenever real-time data $y_t$ becomes available. The updated state $x'_t$ significantly reduces the error in the immediate forecast and, by extension, improves subsequent forecasts through more accurate initialization.
+
+\subsection{Generalization to Multiple Variables}
+Extending to multidimensional variables (temperature, humidity, and wind vector $\mathbf{u}$), the update step becomes:
+
+\begin{equation}
+\mathbf{x}'_t = \hat{\mathbf{x}}_t + \mathbf{K}_t(\mathbf{y}_t - \hat{\mathbf{x}}_t)
+\end{equation}
+
+where $\mathbf{K}_t$ is now the Kalman gain matrix computed as:
+
+\begin{equation}
+\mathbf{K}_t = \mathbf{P}_t(\mathbf{P}_t + \mathbf{R})^{-1}
+\end{equation}
+
+\end{document}
