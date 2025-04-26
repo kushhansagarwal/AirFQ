@@ -1,175 +1,259 @@
 <script lang="ts">
-  // Mock flight data - in a real app, this would come from an API or props
-  const flight = {
-    flightNumber: "UA1234",
-    startAirport: {
-      code: "KSFO",
-      name: "San Francisco International Airport"
-    },
-    endAirport: {
-      code: "KJFK",
-      name: "John F. Kennedy International Airport"
-    },
-    status: "In Progress",
-    windSpeed: "25 knots",
-    airSpeed: "480 knots",
-    location: {
-      lat: 39.8283,
-      lng: -98.5795,
-      description: "Over Kansas City, MO"
-    },
-    temperature: {
-      outside: "-45°C",
-      cabin: "21°C"
-    },
-    reportingSince: new Date(Date.now() - 3600000), // 1 hour ago
-    forecastDeviation: "Minor - 15 min delay expected",
-    reportedHazards: [
-      "PIREP UA /OV DEN 090025 /TM 1516 /FL 210 /TP B738 /TB MOD",
-      "PIREP UA /OV ORD 270030 /TM 1445 /FL 180 /TP A320 /SK BKN070-TOP110 /TA -15",
-      "PIREP UUA /OV JOT 320015 /TM 1430 /FL 090 /TP CRJ2 /IC MOD-SEV RIME"
-    ]
-  };
+	import { onMount, onDestroy } from 'svelte';
+	
+	const { flightInfo } = $props();
 
-  // Format the reporting time
-  const formatTime = (date: Date): string => {
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  };
+	// Flight data structure with default values
+	let flight = $state({
+		flightNumber: flightInfo.flightId,
+		startAirport: {
+			code: flightInfo.departureAirport,
+			name: getAirportFullName(flightInfo.departureAirport)
+		},
+		endAirport: {
+			code: flightInfo.arrivalAirport,
+			name: getAirportFullName(flightInfo.arrivalAirport)
+		},
+		status: 'In Progress',
+		windSpeed: '0 knots',
+		airSpeed: '0 knots',
+		location: {
+			lat: 0,
+			lng: 0,
+			description: 'Connecting...'
+		},
+		temperature: {
+			outside: '0°C',
+			cabin: '21°C'
+		},
+		reportingSince: new Date(),
+		forecastDeviation: 'Connecting to flight data...',
+		reportedHazards: [
+			'Connecting to flight data...'
+		]
+	});
 
-  const formatDate = (date: Date): string => {
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
+	let socket: WebSocket;
+	let connected = $state(false);
 
-  // Determine status color
-  const getStatusColor = (status: string): string => {
-    switch(status.toLowerCase()) {
-      case 'completed': return 'success';
-      case 'delayed': return 'warning';
-      case 'cancelled': return 'error';
-      case 'in progress': return 'info';
-      default: return 'primary';
-    }
-  };
+	// Function to get airport full name based on code
+	function getAirportFullName(code: string): string {
+		const airports: Record<string, string> = {
+			'KSFO': 'San Francisco International Airport',
+			'KJFK': 'John F. Kennedy International Airport',
+			'KLAX': 'Los Angeles International Airport',
+			'KORD': 'O\'Hare International Airport',
+			'KATL': 'Hartsfield-Jackson Atlanta International Airport'
+		};
+		
+		return airports[code] || code;
+	}
+
+	// Format the reporting time
+	function formatTime(date: Date): string {
+		return date.toLocaleTimeString('en-US', {
+			hour: '2-digit',
+			minute: '2-digit',
+			hour12: true
+		});
+	}
+
+	function formatDate(date: Date): string {
+		return date.toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
+	}
+
+	// Determine status color
+	function getStatusColor(status: string): string {
+		switch (status.toLowerCase()) {
+			case 'completed':
+				return 'success';
+			case 'delayed':
+				return 'warning';
+			case 'cancelled':
+				return 'error';
+			case 'in progress':
+				return 'info';
+			default:
+				return 'primary';
+		}
+	}
+
+	// Connect to WebSocket and update flight data
+	onMount(() => {
+		connectWebSocket();
+	});
+
+	onDestroy(() => {
+		if (socket) {
+			socket.close();
+		}
+	});
+
+	function connectWebSocket() {
+		socket = new WebSocket('ws://localhost:8765');
+		
+		socket.onopen = () => {
+			connected = true;
+			console.log('WebSocket connected');
+		};
+		
+		socket.onmessage = (event) => {
+			const data = JSON.parse(event.data);
+			
+			// Only update if this message is for our flight
+			if (data.flightId === flightInfo.flightId) {
+				updateFlightData(data);
+			}
+		};
+		
+		socket.onerror = (error) => {
+			console.error('WebSocket error:', error);
+		};
+		
+		socket.onclose = () => {
+			connected = false;
+			console.log('WebSocket disconnected');
+			
+			// Try to reconnect after a delay
+			setTimeout(connectWebSocket, 5000);
+		};
+	}
+
+	function updateFlightData(data: any) {
+		flight = {
+			...flight,
+			windSpeed: `${Math.round(data.gs - data.tas)} knots`,
+			airSpeed: `${Math.round(data.tas)} knots`,
+			location: {
+				lat: data.lat,
+				lng: data.lon,
+				description: `Heading ${Math.round(data.heading)}° at ${Math.round(data.gs)} knots`
+			},
+			temperature: {
+				outside: `${Math.round(data.oat)}°C`,
+				cabin: '21°C'
+			},
+			reportingSince: new Date(data.timestamp || Date.now())
+		};
+	}
 </script>
 
-<div class="p-4 max-w-4xl mx-auto">
-  <div class="card bg-base-100 shadow-xl">
-    <!-- Header with flight number and airports -->
-    <div class="card-body">
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
-        <div>
-          <h2 class="card-title text-2xl font-bold">{flight.flightNumber}</h2>
-          <p class="text-base-content/70">
-            {formatDate(flight.reportingSince)} • Reporting since {formatTime(flight.reportingSince)}
-          </p>
-        </div>
-        <div class="badge badge-{getStatusColor(flight.status)} badge-lg mt-2 md:mt-0">
-          {flight.status}
-        </div>
-      </div>
+<div class="">
+	<div class="bg-base-100">
+		<!-- Header with flight number and airports -->
+		<div class="card-body">
+			<div class="flex flex-col items-start justify-between md:flex-row md:items-center">
+				<div>
+					<h2 class="card-title text-2xl font-bold">{flightInfo.flightId}</h2>
+					<p class="text-base-content/70">
+						{formatDate(flight.reportingSince)} • Reporting since {formatTime(
+							flight.reportingSince
+						)}
+					</p>
+				</div>
+				<div class="badge badge-lg mt-2 md:mt-0 border-2 
+					{connected ? 'border-success text-success' : 
+					 'border-warning text-warning'}">
+					{connected ? 'Live' : 'Waiting'}
+				</div>
+			</div>
 
-      <!-- Flight route visualization -->
-      <div class="my-6 flex items-center justify-between">
-        <div class="text-center">
-          <div class="text-2xl font-bold">{flight.startAirport.code}</div>
-          <div class="text-sm text-base-content/70">{flight.startAirport.name}</div>
-        </div>
-        
-        <div class="flex-1 mx-4 relative">
-          <div class="h-1 bg-base-300 w-full"></div>
-          <div class="absolute w-3 h-3 bg-primary rounded-full" style="left: 40%; top: -4px;"></div>
-          <div class="text-xs text-center mt-2">{flight.location.description}</div>
-        </div>
-        
-        <div class="text-center">
-          <div class="text-2xl font-bold">{flight.endAirport.code}</div>
-          <div class="text-sm text-base-content/70">{flight.endAirport.name}</div>
-        </div>
-      </div>
+			<!-- Flight route visualization -->
+			<div class="my-6 flex items-center justify-between">
+				<div class="text-center">
+					<div class="text-2xl font-bold">{flight.startAirport.code}</div>
+					<div class="text-base-content/70 text-sm">{flight.startAirport.name}</div>
+				</div>
 
-      <!-- Flight stats -->
-      <div class="stats stats-vertical lg:stats-horizontal shadow w-full my-4">
-        <div class="stat">
-          <div class="stat-title">Wind Speed</div>
-          <div class="stat-value text-lg">{flight.windSpeed}</div>
-        </div>
-        
-        <div class="stat">
-          <div class="stat-title">Air Speed</div>
-          <div class="stat-value text-lg">{flight.airSpeed}</div>
-        </div>
-        
-        <div class="stat">
-          <div class="stat-title">Outside Temp</div>
-          <div class="stat-value text-lg">{flight.temperature.outside}</div>
-        </div>
-        
-        <div class="stat">
-          <div class="stat-title">Cabin Temp</div>
-          <div class="stat-value text-lg">{flight.temperature.cabin}</div>
-        </div>
-      </div>
+				<div class="relative mx-4 flex-1">
+					<div class="bg-base-300 h-1 w-full"></div>
+					<div class="bg-primary absolute h-3 w-3 rounded-full" style="left: 40%; top: -4px;"></div>
+					<div class="mt-2 text-center text-xs">{flight.location.description}</div>
+				</div>
 
-      <!-- Location and forecast -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
-        <div class="card bg-base-200">
-          <div class="card-body">
-            <h3 class="card-title text-lg">Current Location</h3>
-            <p>Latitude: {flight.location.lat}</p>
-            <p>Longitude: {flight.location.lng}</p>
-            <p>{flight.location.description}</p>
-          </div>
-        </div>
-        
-        <div class="card bg-base-200">
-          <div class="card-body">
-            <h3 class="card-title text-lg">Forecast Deviation</h3>
-            <p>{flight.forecastDeviation}</p>
-          </div>
-        </div>
-      </div>
+				<div class="text-center">
+					<div class="text-2xl font-bold">{flight.endAirport.code}</div>
+					<div class="text-base-content/70 text-sm">{flight.endAirport.name}</div>
+				</div>
+			</div>
 
-      <!-- Reported hazards -->
-      <div class="my-4">
-        <h3 class="text-lg font-bold mb-2">Reported Hazards (PIREPs)</h3>
-        <div class="bg-base-200 p-4 rounded-lg">
-          <ul class="space-y-2">
-            {#each flight.reportedHazards as hazard}
-              <li class="p-2 bg-base-100 rounded border-l-4 border-warning font-mono text-sm">
-                {hazard}
-              </li>
-            {/each}
-          </ul>
-        </div>
-      </div>
+			<!-- Flight stats -->
+			<div class="stats stats-vertical lg:stats-horizontal my-4 w-full shadow">
+				<div class="stat">
+					<div class="stat-title">Wind Speed</div>
+					<div class="stat-value text-lg">{flight.windSpeed}</div>
+				</div>
 
-      <!-- PIREP legend -->
-      <div class="collapse collapse-arrow bg-base-200 my-4">
-        <input type="checkbox" /> 
-        <div class="collapse-title font-medium">
-          PIREP Code Legend
-        </div>
-        <div class="collapse-content text-sm"> 
-          <p><strong>UA</strong> - Routine PIREP</p>
-          <p><strong>UUA</strong> - Urgent PIREP</p>
-          <p><strong>OV</strong> - Location</p>
-          <p><strong>TM</strong> - Time</p>
-          <p><strong>FL</strong> - Flight Level</p>
-          <p><strong>TP</strong> - Aircraft Type</p>
-          <p><strong>SK</strong> - Sky Condition</p>
-          <p><strong>TA</strong> - Temperature</p>
-          <p><strong>TB</strong> - Turbulence</p>
-          <p><strong>IC</strong> - Icing</p>
-        </div>
-      </div>
-    </div>
-  </div>
+				<div class="stat">
+					<div class="stat-title">Air Speed</div>
+					<div class="stat-value text-lg">{flight.airSpeed}</div>
+				</div>
+
+				<div class="stat">
+					<div class="stat-title">Outside Temp</div>
+					<div class="stat-value text-lg">{flight.temperature.outside}</div>
+				</div>
+
+				<div class="stat">
+					<div class="stat-title">Cabin Temp</div>
+					<div class="stat-value text-lg">{flight.temperature.cabin}</div>
+				</div>
+			</div>
+
+			<!-- Location and forecast -->
+			<div class="my-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+				<div class="card bg-base-200">
+					<div class="card-body">
+						<h3 class="card-title text-lg">Current Location</h3>
+						<p>Latitude: {flight.location.lat}</p>
+						<p>Longitude: {flight.location.lng}</p>
+						<p>{flight.location.description}</p>
+					</div>
+				</div>
+
+				<div class="card bg-base-200">
+					<div class="card-body">
+						<h3 class="card-title text-lg">Forecast Deviation</h3>
+						<p>{flight.forecastDeviation}</p>
+					</div>
+				</div>
+			</div>
+
+			<!-- Reported hazards -->
+			<div class="my-4">
+				<h3 class="mb-2 text-lg font-bold">Reported Hazards (PIREPs)</h3>
+				<div class="bg-base-200 rounded-lg p-4">
+					<ul class="space-y-2">
+						{#each flight.reportedHazards as hazard}
+							<li class="bg-base-100 border-warning rounded border-l-4 p-2 font-mono text-sm">
+								{hazard}
+							</li>
+						{/each}
+					</ul>
+				</div>
+			</div>
+
+			<!-- PIREP legend -->
+			<div class="collapse-arrow bg-base-200 collapse my-4">
+				<input type="checkbox" />
+				<div class="collapse-title font-medium">PIREP Code Legend</div>
+				<div class="collapse-content text-sm">
+					<p><strong>UA</strong> - Routine PIREP</p>
+					<p><strong>UUA</strong> - Urgent PIREP</p>
+					<p><strong>OV</strong> - Location</p>
+					<p><strong>TM</strong> - Time</p>
+					<p><strong>FL</strong> - Flight Level</p>
+					<p><strong>TP</strong> - Aircraft Type</p>
+					<p><strong>SK</strong> - Sky Condition</p>
+					<p><strong>TA</strong> - Temperature</p>
+					<p><strong>TB</strong> - Turbulence</p>
+					<p><strong>IC</strong> - Icing</p>
+				</div>
+			</div>
+		</div>
+	</div>
 </div>
