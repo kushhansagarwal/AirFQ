@@ -45,4 +45,12 @@
   html {
     font-family: 'Serenity', sans-serif;
   }
+
+  .active {
+    @apply text-primary bg-primary/10 w-full;
+  }
+
+  button {
+    @apply text-base;
+  }
 }
