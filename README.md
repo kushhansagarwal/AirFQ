@@ -51,7 +51,7 @@ npm run dev
 
 The web dashboard will be available at `http://localhost:5173`
 
-## Technical Details
+## [Technical Details](whitepaper/AirFQ.pdf)
 
 The project implements a real-time flight data augmentation system using Kalman filtering. The mathematical formulation and implementation details can be found in the whitepaper directory.
 
