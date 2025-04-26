@@ -79,6 +79,13 @@ Create a `.env` file in the `/web` directory with these variables.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+
+## Acknowledgements
+
+Some code from previous projects was reused, specifically:
+
+- Experience with the [AviationWeather.gov](https://www.aviationweather.gov/) API and a program to create wind charts
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
