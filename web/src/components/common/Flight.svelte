@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-
+    import Map from './Map.svelte';
 	const { flightInfo } = $props();
 
 	let data: any = $state(null);
@@ -49,6 +49,9 @@
 		}
 	});
 
+	let updateCount = $state(0);
+	let mapKey = $state(0);
+
 	onMount(() => {
 		connectWebSocket();
 	});
@@ -63,6 +66,10 @@
 			const msg = JSON.parse(event.data);
 			if (msg.flightId === flightInfo.flightId) {
 				data = msg;
+				updateCount += 1;
+				if (updateCount % 5 === 0) {
+					mapKey += 1;
+				}
 			}
 		};
 		socket.onclose = () => setTimeout(connectWebSocket, 5000);
@@ -134,7 +141,7 @@
 	</div>
 
 	<!-- Outside Temp & Humidity -->
-	<div class="grid grid-cols-2 gap-6 mt-8">
+	<div class="grid grid-cols-2 gap-6 mt-8 mb-8">
 		<div class="flex flex-col items-center">
 			<div class="text-sm font-semibold mb-1">Outside Temp</div>
 			<div class="text-lg font-mono">{Math.round(data.oat)}°C</div>
@@ -145,13 +152,9 @@
 		</div>
 	</div>
 
-	<!-- Location -->
-	<div class="mt-8 flex flex-col items-center gap-1">
-		<div class="text-sm font-semibold">Current Location</div>
-		<div class="font-mono text-base">
-			Lat: {data.lat.toFixed(5)}, Lng: {data.lon.toFixed(5)}
-		</div>
-	</div>
+    {#key mapKey}
+        <Map lat={data.lat} lon={data.lon} heading={data.heading} />
+    {/key}
 </div>
 {:else}
 <div class="flex items-center justify-center h-64 text-base-content/60">
