@@ -78,10 +78,10 @@ async def flight_data_server(websocket):  # Removed the path parameter
                 await websocket.send(json.dumps(flight_data))
                 
                 # Small delay between each flight's data
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.1)
             
             # Wait before sending next update for all flights
-            await asyncio.sleep(0.4)
+            await asyncio.sleep(0.1)
     except websockets.exceptions.ConnectionClosed:
         print(f"Client disconnected: {websocket.remote_address}")
 
