@@ -9,19 +9,16 @@ if not mplconfigdir:
 
 import requests
 import matplotlib
-# Use Agg backend to avoid GUI issues when running in a non-main thread
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.basemap import Basemap
 from datetime import datetime, timezone, timedelta
-import threading
 from math import radians, sin, cos, sqrt, atan2
 
 padding = 0.1
 
 def haversine(lat1, lon1, lat2, lon2):
-    # Radius of the Earth in km
     R = 6371.0
     dlat = radians(lat2 - lat1)
     dlon = radians(lon2 - lon1)
@@ -29,7 +26,6 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return R * c
 
- # Define a function to map distance to zoom level
 def get_zoom_for_distance(distance_km):
     if distance_km < 100:
         return "12"
@@ -47,11 +43,10 @@ def get_zoom_for_distance(distance_km):
 def get_airport_by_icao(icao_code):
     api_url = f'https://api.api-ninjas.com/v1/airports?icao={icao_code}'
     response = requests.get(api_url, headers={'X-Api-Key': os.getenv('AIRPORT_KEY')})
-    print(f"Requesting airport info: {response.url}")
     if response.status_code == requests.codes.ok:
         data = response.json()
         if data:
-            return data[0]  # API returns a list of airports
+            return data[0]
     return None
 
 def make_request_with_params(base_url, params):
@@ -73,10 +68,8 @@ def fetch_terrain_data(min_lon, max_lon, min_lat, max_lat, resolution=0.05):
     }
     response = requests.get(url, params=params)
     if response.status_code != 200:
-        print(f"Failed to fetch terrain data: {response.status_code}")
         return None, None, None
 
-    from io import StringIO
     content = response.text
     header_lines = []
     data_lines = []
@@ -111,7 +104,48 @@ def fetch_terrain_data(min_lon, max_lon, min_lat, max_lat, resolution=0.05):
     lon_grid, lat_grid = np.meshgrid(lons, lats)
     return lon_grid, lat_grid, elevation
 
-def plot_wind_data(data, airport_coords, airport_names, level, output_dir):
+# --- Helper for consistent plot sizing and aspect ratio ---
+def get_plot_dimensions(min_lon, max_lon, min_lat, max_lat, base_dpi=300, base_width=15, max_pixels=2000):
+    """
+    Returns (figsize, dpi) for a given bounding box, keeping a fixed width and aspect ratio.
+    Limits the maximum dimension to max_pixels.
+    """
+    # Calculate aspect ratio (width:height) based on degrees
+    width_deg = max_lon - min_lon
+    height_deg = max_lat - min_lat
+    if height_deg == 0:
+        height_deg = 1e-6  # avoid division by zero
+    aspect = width_deg / height_deg
+    
+    # Keep width fixed, adjust height for aspect
+    width = base_width
+    height = width / aspect
+    
+    # Optionally, clamp height to a reasonable range
+    height = max(5, min(height, 30))
+    
+    # Calculate actual pixel dimensions
+    width_px = width * base_dpi
+    height_px = height * base_dpi
+    
+    # If either dimension exceeds max_pixels, scale down
+    if width_px > max_pixels or height_px > max_pixels:
+        if width_px > height_px:
+            scale_factor = max_pixels / width_px
+        else:
+            scale_factor = max_pixels / height_px
+        
+        # Either reduce the figure size or the DPI to achieve the target size
+        # Here we're adjusting the DPI
+        adjusted_dpi = base_dpi * scale_factor
+        return (width, height), adjusted_dpi
+    
+    return (width, height), base_dpi
+
+def plot_wind_data(
+    data, airport_coords, airport_names, level, output_dir,
+    plot_bbox=None, plot_figsize=None, plot_dpi=None, max_pixels=2000
+):
     features = data['features']
     lons = []
     lats = []
@@ -124,16 +158,13 @@ def plot_wind_data(data, airport_coords, airport_names, level, output_dir):
             if 'properties' in feature and 'wdir' in feature['properties'] and 'wspd' in feature['properties']:
                 wdir = feature['properties']['wdir']
                 wspd = feature['properties']['wspd']
-
                 try:
                     wdir = float(wdir)
                     wspd = float(wspd)
                 except ValueError:
                     continue
-
                 lons.append(lon)
                 lats.append(lat)
-
                 rad = np.deg2rad(wdir)
                 u = wspd * np.sin(rad)
                 v = wspd * np.cos(rad)
@@ -142,23 +173,33 @@ def plot_wind_data(data, airport_coords, airport_names, level, output_dir):
 
     from_lon, from_lat = airport_coords[0]
     to_lon, to_lat = airport_coords[1]
-    
-    min_lon = min(from_lon, to_lon) - padding
-    max_lon = max(from_lon, to_lon) + padding
-    min_lat = min(from_lat, to_lat) - padding
-    max_lat = max(from_lat, to_lat) + padding
+    if plot_bbox is not None:
+        min_lon, max_lon, min_lat, max_lat = plot_bbox
+    else:
+        min_lon = min(from_lon, to_lon) - padding
+        max_lon = max(from_lon, to_lon) + padding
+        min_lat = min(from_lat, to_lat) - padding
+        max_lat = max(from_lat, to_lat) + padding
+
+    # Get consistent figure size and dpi
+    if plot_figsize is None or plot_dpi is None:
+        plot_figsize, plot_dpi = get_plot_dimensions(min_lon, max_lon, min_lat, max_lat, max_pixels=max_pixels)
 
     try:
         lon_grid, lat_grid, elevation = fetch_terrain_data(min_lon, max_lon, min_lat, max_lat)
-    except Exception as terr_e:
-        print(f"Error fetching terrain data: {terr_e}")
+    except Exception:
         lon_grid, lat_grid, elevation = None, None, None
 
     plt.rcParams['svg.fonttype'] = 'none'
-    fig = plt.figure(figsize=(15, 10), dpi=300)
+    fig = plt.figure(figsize=plot_figsize, dpi=plot_dpi)
+    ax = fig.add_axes([0, 0, 1, 1])  # full-figure axes, no border
+
+    # Set white background
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
 
     m = Basemap(projection='merc', llcrnrlat=min_lat, urcrnrlat=max_lat,
-                llcrnrlon=min_lon, urcrnrlon=max_lon, resolution='i')
+                llcrnrlon=min_lon, urcrnrlon=max_lon, resolution='i', ax=ax)
 
     if lon_grid is not None and lat_grid is not None and elevation is not None:
         elev_masked = np.ma.masked_invalid(elevation)
@@ -168,43 +209,36 @@ def plot_wind_data(data, airport_coords, airport_names, level, output_dir):
         vmin = max(0, vmin)
         vmax = max(vmax, vmin + 1)
         m.pcolormesh(x_terr, y_terr, elev_masked, cmap='terrain', shading='auto', alpha=0.6, vmin=vmin, vmax=vmax)
-        cbar = plt.colorbar(label='Elevation (m)', shrink=0.7, pad=0.02)
-        cbar.ax.tick_params(labelsize=10)
 
     m.drawcoastlines(linewidth=0.5)
     m.drawcountries(linewidth=0.5)
     m.drawstates(linewidth=0.3)
-    
-    m.drawparallels(np.arange(int(min_lat), int(max_lat) + 1, 2), labels=[1, 0, 0, 0])
-    m.drawmeridians(np.arange(int(min_lon), int(max_lon) + 1, 2), labels=[0, 0, 0, 1])
+    m.drawparallels(np.arange(int(min_lat), int(max_lat) + 1, 2), labels=[0, 0, 0, 0])
+    m.drawmeridians(np.arange(int(min_lon), int(max_lon) + 1, 2), labels=[0, 0, 0, 0])
 
     x, y = m(lons, lats)
-    m.quiver(x, y, u_components, v_components, 
-             color='blue', scale=500, width=0.003)
+    m.quiver(x, y, u_components, v_components, color='blue', scale=500, width=0.003)
 
     x_from, y_from = m(from_lon, from_lat)
     x_to, y_to = m(to_lon, to_lat)
-    
     m.plot(x_from, y_from, 'ro', markersize=10)
-    plt.text(x_from, y_from, airport_names[0], fontsize=12, color='black',
-             horizontalalignment='right', verticalalignment='bottom')
-    
     m.plot(x_to, y_to, 'go', markersize=10)
-    plt.text(x_to, y_to, airport_names[1], fontsize=12, color='black',
-             horizontalalignment='right', verticalalignment='bottom')
-    
     m.plot([x_from, x_to], [y_from, y_to], 'k-', linewidth=2)
 
-    plt.title(f'Wind Data for Route: {airport_names[0]} to {airport_names[1]} (FL{level})')
-    plt.grid(True, alpha=0.3)
-    
-    output_file = os.path.join(output_dir, f'wind_data_{airport_names[0]}_to_{airport_names[1]}_FL{level}.svg')
-    plt.savefig(output_file, format='svg', bbox_inches='tight', pad_inches=0.1)
+    # Remove all axes, ticks, spines, and title
+    ax.set_axis_off()
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    # fig.patch.set_visible(False)  # keep white background
+
+    output_file = os.path.join(output_dir, f'wind_data_{airport_names[0]}_to_{airport_names[1]}_FL{level}.png')
+    plt.savefig(output_file, format='png', bbox_inches='tight', pad_inches=0.0, transparent=False, facecolor='white', dpi=600)
     plt.close(fig)
-    
     return output_file
 
-def plot_wind_data_augmented(data, airport_coords, airport_names, level, output_dir, magnitude_factor, angle_factor):
+def plot_wind_data_augmented(
+    data, airport_coords, airport_names, level, output_dir, magnitude_factor, angle_factor,
+    plot_bbox=None, plot_figsize=None, plot_dpi=None, max_pixels=2000
+):
     features = data['features']
     lons = []
     lats = []
@@ -215,68 +249,67 @@ def plot_wind_data_augmented(data, airport_coords, airport_names, level, output_
     augmentation_texts = []
     augmentation_coords = []
 
-    # We'll store the augmentation info for each point to plot after the map is set up
     for feature in features:
         if 'geometry' in feature and 'coordinates' in feature['geometry']:
             lon, lat = feature['geometry']['coordinates']
             if 'properties' in feature and 'wdir' in feature['properties'] and 'wspd' in feature['properties']:
                 wdir = feature['properties']['wdir']
                 wspd = feature['properties']['wspd']
-
                 try:
                     wdir = float(wdir)
                     wspd = float(wspd)
                 except ValueError:
                     continue
-
                 lons.append(lon)
                 lats.append(lat)
-
-                # Original wind components
                 rad = np.deg2rad(wdir)
                 u = wspd * np.sin(rad)
                 v = wspd * np.cos(rad)
                 u_components.append(u)
                 v_components.append(v)
-
-                # Augmented wind components
                 wspd_augmented = wspd * magnitude_factor
-                angle_augmentation = wspd * angle_factor  # Proportional to wind speed
+                angle_augmentation = wspd * angle_factor
                 wdir_augmented = wdir + angle_augmentation
                 rad_augmented = np.deg2rad(wdir_augmented)
                 u_augmented = wspd_augmented * np.sin(rad_augmented)
                 v_augmented = wspd_augmented * np.cos(rad_augmented)
                 u_components_augmented.append(u_augmented)
                 v_components_augmented.append(v_augmented)
-
-                # Compute difference in heading and windspeed
                 heading_diff = wdir_augmented - wdir
                 wspd_diff = wspd_augmented - wspd
-                # Format as +X.X° / +Y.Y kt (or -)
                 diff_text = f"{heading_diff:+.1f}° / {wspd_diff:+.1f}kt"
-                # Save for later plotting
                 augmentation_texts.append(diff_text)
                 augmentation_coords.append((lon, lat))
 
     from_lon, from_lat = airport_coords[0]
     to_lon, to_lat = airport_coords[1]
-    
-    min_lon = min(from_lon, to_lon) - padding
-    max_lon = max(from_lon, to_lon) + padding
-    min_lat = min(from_lat, to_lat) - padding
-    max_lat = max(from_lat, to_lat) + padding
+    if plot_bbox is not None:
+        min_lon, max_lon, min_lat, max_lat = plot_bbox
+    else:
+        min_lon = min(from_lon, to_lon) - padding
+        max_lon = max(from_lon, to_lon) + padding
+        min_lat = min(from_lat, to_lat) - padding
+        max_lat = max(from_lat, to_lat) + padding
+
+    # Get consistent figure size and dpi
+    if plot_figsize is None or plot_dpi is None:
+        plot_figsize, plot_dpi = get_plot_dimensions(min_lon, max_lon, min_lat, max_lat, max_pixels=max_pixels)
 
     try:
         lon_grid, lat_grid, elevation = fetch_terrain_data(min_lon, max_lon, min_lat, max_lat)
-    except Exception as terr_e:
-        print(f"Error fetching terrain data: {terr_e}")
+    except Exception:
         lon_grid, lat_grid, elevation = None, None, None
 
     plt.rcParams['svg.fonttype'] = 'none'
-    fig = plt.figure(figsize=(15, 10), dpi=300)
+    fig = plt.figure(figsize=plot_figsize, dpi=plot_dpi)
+    ax = fig.add_axes([0, 0, 1, 1])  # full-figure axes, no border
+
+    # Set white background
+    fig.patch.set_facecolor('white')
+    ax.set_facecolor('white')
 
     m = Basemap(projection='merc', llcrnrlat=min_lat, urcrnrlat=max_lat,
-                llcrnrlon=min_lon, urcrnrlon=max_lon, resolution='i')
+                llcrnrlon=min_lon, urcrnrlon=max_lon, resolution='i', ax=ax)
 
     if lon_grid is not None and lat_grid is not None and elevation is not None:
         elev_masked = np.ma.masked_invalid(elevation)
@@ -286,91 +319,69 @@ def plot_wind_data_augmented(data, airport_coords, airport_names, level, output_
         vmin = max(0, vmin)
         vmax = max(vmax, vmin + 1)
         m.pcolormesh(x_terr, y_terr, elev_masked, cmap='terrain', shading='auto', alpha=0.6, vmin=vmin, vmax=vmax)
-        cbar = plt.colorbar(label='Elevation (m)', shrink=0.7, pad=0.02)
-        cbar.ax.tick_params(labelsize=10)
 
     m.drawcoastlines(linewidth=0.5)
     m.drawcountries(linewidth=0.5)
     m.drawstates(linewidth=0.3)
-    
-    m.drawparallels(np.arange(int(min_lat), int(max_lat) + 1, 2), labels=[1, 0, 0, 0])
-    m.drawmeridians(np.arange(int(min_lon), int(max_lon) + 1, 2), labels=[0, 0, 0, 1])
+    m.drawparallels(np.arange(int(min_lat), int(max_lat) + 1, 2), labels=[0, 0, 0, 0])
+    m.drawmeridians(np.arange(int(min_lon), int(max_lon) + 1, 2), labels=[0, 0, 0, 0])
 
     x, y = m(lons, lats)
-    
-    # Plot original wind vectors in blue with lower opacity
-    m.quiver(x, y, u_components, v_components, 
-             color='blue', scale=500, width=0.003, alpha=0.4, label='Original Winds')
-    
-    # Plot augmented wind vectors in red
-    m.quiver(x, y, u_components_augmented, v_components_augmented, 
-             color='red', scale=500, width=0.003, alpha=0.8, label='Augmented Winds')
+    m.quiver(x, y, u_components, v_components, color='blue', scale=500, width=0.003, alpha=0.4)
+    m.quiver(x, y, u_components_augmented, v_components_augmented, color='red', scale=500, width=0.003, alpha=0.8)
 
-    # Plot augmentation info next to each point
-    for (lon, lat), diff_text in zip(augmentation_coords, augmentation_texts):
-        x_pt, y_pt = m(lon, lat)
-        # Offset the text slightly so it doesn't overlap the arrow base
-        plt.text(
-            x_pt + 2000, y_pt + 2000,  # Offset in map coordinates (tune as needed)
-            diff_text,
-            fontsize=7, color='purple', alpha=0.85,
-            ha='left', va='bottom',
-            zorder=11,
-            bbox=dict(facecolor='white', edgecolor='none', alpha=0.5, boxstyle='round,pad=0.1')
-        )
+    # for (lon, lat), diff_text in zip(augmentation_coords, augmentation_texts):
+    #     x_pt, y_pt = m(lon, lat)
+    #     plt.text(
+    #         x_pt + 2000, y_pt + 2000,
+    #         diff_text,
+    #         fontsize=7, color='purple', alpha=0.85,
+    #         ha='left', va='bottom',
+    #         zorder=11,
+    #         bbox=dict(facecolor='white', edgecolor='none', alpha=0.5, boxstyle='round,pad=0.1')
+    #     )
 
     x_from, y_from = m(from_lon, from_lat)
     x_to, y_to = m(to_lon, to_lat)
-    
     m.plot(x_from, y_from, 'ro', markersize=10)
-    plt.text(x_from, y_from, airport_names[0], fontsize=12, color='black',
-             horizontalalignment='right', verticalalignment='bottom')
-    
     m.plot(x_to, y_to, 'go', markersize=10)
-    plt.text(x_to, y_to, airport_names[1], fontsize=12, color='black',
-             horizontalalignment='right', verticalalignment='bottom')
-    
     m.plot([x_from, x_to], [y_from, y_to], 'k-', linewidth=2)
 
-    plt.title(f'Wind Data for Route: {airport_names[0]} to {airport_names[1]} (FL{level})\n' +
-              f'Magnitude Factor: {magnitude_factor:.1f}, Angle Factor: {angle_factor:.1f}°/kt')
-    plt.grid(True, alpha=0.3)
-    
-    plt.legend(loc='upper right')
-    
+    # Remove all axes, ticks, spines, and title
+    ax.set_axis_off()
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    # fig.patch.set_visible(False)  # keep white background
+
     output_file = os.path.join(output_dir, 
-                              f'wind_data_augmented_{airport_names[0]}_to_{airport_names[1]}_FL{level}.svg')
-    plt.savefig(output_file, format='svg', bbox_inches='tight', pad_inches=0.1)
+                              f'wind_data_augmented_{airport_names[0]}_to_{airport_names[1]}_FL{level}.png')
+    plt.savefig(output_file, format='png', bbox_inches='tight', pad_inches=0.0, transparent=False, facecolor='white', dpi=600)
     plt.close(fig)
-    
     return output_file
 
-def generate_wind_plots(departure_icao, arrival_icao, levels, output_dir):
+def generate_wind_plots(departure_icao, arrival_icao, levels, output_dir, max_pixels=2000):
     from_airport = get_airport_by_icao(departure_icao)
     to_airport = get_airport_by_icao(arrival_icao)
-
     if not from_airport:
         raise ValueError(f"Airport with ICAO code '{departure_icao}' not found.")
     if not to_airport:
         raise ValueError(f"Airport with ICAO code '{arrival_icao}' not found.")
-
     from_lat = float(from_airport['latitude'])
     from_lon = float(from_airport['longitude'])
     to_lat = float(to_airport['latitude'])
     to_lon = float(to_airport['longitude'])
-
     current_date = datetime.now().astimezone(timezone(timedelta(hours=-8))).strftime("%Y%m%d")
-
     min_lat = min(from_lat, to_lat) - padding
     max_lat = max(from_lat, to_lat) + padding
     min_lon = min(from_lon, to_lon) - padding
     max_lon = max(from_lon, to_lon) + padding
-
     base_url = "https://aviationweather.gov/api/json/ModelWindsJSON"
     plot_files = []
-    
     route_distance_km = haversine(from_lat, from_lon, to_lat, to_lon)
     zoom_level = get_zoom_for_distance(route_distance_km)
+
+    # Get consistent plot size/aspect for this airport pair
+    plot_bbox = (min_lon, max_lon, min_lat, max_lat)
+    plot_figsize, plot_dpi = get_plot_dimensions(min_lon, max_lon, min_lat, max_lat, max_pixels=max_pixels)
 
     for level in levels:
         params = {
@@ -384,42 +395,40 @@ def generate_wind_plots(departure_icao, arrival_icao, levels, output_dir):
             "tref": "00",
             "fhr": "00"
         }
-
         response_data = make_request_with_params(base_url, params)
         airport_coords = [(from_lon, from_lat), (to_lon, to_lat)]
         airport_names = [from_airport['icao'], to_airport['icao']]
-        
-        plot_file = plot_wind_data(response_data, airport_coords, airport_names, level, output_dir)
+        plot_file = plot_wind_data(
+            response_data, airport_coords, airport_names, level, output_dir,
+            plot_bbox=plot_bbox, plot_figsize=plot_figsize, plot_dpi=plot_dpi, max_pixels=max_pixels
+        )
         plot_files.append(plot_file)
-
     return plot_files
 
-def generate_wind_plots_augmented(departure_icao, arrival_icao, levels, output_dir, magnitude_factor, angle_factor):
+def generate_wind_plots_augmented(departure_icao, arrival_icao, levels, output_dir, magnitude_factor, angle_factor, max_pixels=2000):
     from_airport = get_airport_by_icao(departure_icao)
     to_airport = get_airport_by_icao(arrival_icao)
-
     if not from_airport:
         raise ValueError(f"Airport with ICAO code '{departure_icao}' not found.")
     if not to_airport:
         raise ValueError(f"Airport with ICAO code '{arrival_icao}' not found.")
-
     from_lat = float(from_airport['latitude'])
     from_lon = float(from_airport['longitude'])
     to_lat = float(to_airport['latitude'])
     to_lon = float(to_airport['longitude'])
-
     current_date = datetime.now().astimezone(timezone(timedelta(hours=-8))).strftime("%Y%m%d")
-
     min_lat = min(from_lat, to_lat) - padding
     max_lat = max(from_lat, to_lat) + padding
     min_lon = min(from_lon, to_lon) - padding
     max_lon = max(from_lon, to_lon) + padding
-
     route_distance_km = haversine(from_lat, from_lon, to_lat, to_lon)
     zoom_level = get_zoom_for_distance(route_distance_km)
-
     base_url = "https://aviationweather.gov/api/json/ModelWindsJSON"
     plot_files = []
+
+    # Get consistent plot size/aspect for this airport pair
+    plot_bbox = (min_lon, max_lon, min_lat, max_lat)
+    plot_figsize, plot_dpi = get_plot_dimensions(min_lon, max_lon, min_lat, max_lat, max_pixels=max_pixels)
 
     for level in levels:
         params = {
@@ -433,24 +442,22 @@ def generate_wind_plots_augmented(departure_icao, arrival_icao, levels, output_d
             "tref": "00",
             "fhr": "00"
         }
-
         response_data = make_request_with_params(base_url, params)
         airport_coords = [(from_lon, from_lat), (to_lon, to_lat)]
         airport_names = [from_airport['icao'], to_airport['icao']]
-        
-        plot_file = plot_wind_data_augmented(response_data, airport_coords, airport_names, 
-                                           level, output_dir, magnitude_factor, angle_factor)
+        plot_file = plot_wind_data_augmented(
+            response_data, airport_coords, airport_names, 
+            level, output_dir, magnitude_factor, angle_factor,
+            plot_bbox=plot_bbox, plot_figsize=plot_figsize, plot_dpi=plot_dpi, max_pixels=max_pixels
+        )
         plot_files.append(plot_file)
-
     return plot_files
 
 if __name__ == '__main__':
-    # Example usage when running the script directly
     departure = "KSMO"
     arrival = "KSBA"
     levels = ['030', '050', '070', '090', '120']
     output_dir = "."
-    
     try:
         plot_files = generate_wind_plots(departure, arrival, levels, output_dir)
         print(f"Generated {len(plot_files)} wind data plots:")

@@ -6,6 +6,10 @@ import time
 import math
 from datetime import datetime
 
+# Configuration for the WebSocket server
+HOST = "localhost"
+PORT = 8765
+
 # Flight data generator
 class FlightDataGenerator:
     def __init__(self, flight_id=None, lat=None, lon=None):
@@ -106,7 +110,9 @@ class FlightDataGenerator:
             "speedFactor": self.speed_factor,  # Include the new metric in the output
             "timestamp": int(time.time() * 1000),
             "lat": self.lat,
-            "lon": self.lon
+            "lon": self.lon,
+            "imageFormat": "png",  # Specify high resolution PNG format instead of SVG
+            "imageResolution": "high"  # Specify high resolution for the image
         }
 
 # --- GLOBALS for broadcasting ---
@@ -119,24 +125,46 @@ flight_generators = [
     FlightDataGenerator(flight_id="N400JW", lat=41.8781, lon=-87.6298)   # Chicago
 ]
 
-async def publish_flight_data():
-    async with websockets.connect("ws://ec2-54-189-248-53.us-west-2.compute.amazonaws.com/ws2") as ws:
-        while True:
-            # Generate data for all flights
-            flight_data_list = [gen.generate_data() for gen in flight_generators]
-            # Send each flight's data to the WebSocket server
-            for flight_data in flight_data_list:
-                message = json.dumps(flight_data)
-                await ws.send(message)
-                await asyncio.sleep(0.1)
-            # Wait before next update for all flights
+async def broadcast_flight_data():
+    while True:
+        # Generate data for all flights
+        flight_data_list = [gen.generate_data() for gen in flight_generators]
+        # Send each flight's data to all connected clients
+        for flight_data in flight_data_list:
+            message = json.dumps(flight_data)
+            # Send to all clients, remove any that are closed
+            disconnected = set()
+            for ws in connected_clients:
+                try:
+                    await ws.send(message)
+                except websockets.exceptions.ConnectionClosed:
+                    disconnected.add(ws)
+            connected_clients.difference_update(disconnected)
             await asyncio.sleep(0.1)
+        # Wait before next update for all flights
+        await asyncio.sleep(0.1)
 
-# Main function to start the publisher
+# WebSocket handler
+async def flight_data_server(websocket):
+    # Add the new client to the set
+    connected_clients.add(websocket)
+    print(f"Client connected: {websocket.remote_address}")
+    try:
+        # Keep the connection open until client disconnects
+        await websocket.wait_closed()
+    finally:
+        connected_clients.discard(websocket)
+        print(f"Client disconnected: {websocket.remote_address}")
+
+# Main function to start the server and broadcaster
 async def main():
-    publisher = asyncio.create_task(publish_flight_data())
-    await publisher
+    server = await websockets.serve(flight_data_server, HOST, PORT)
+    print(f"WebSocket server started at ws://{HOST}:{PORT}")
+    # Start the broadcaster task
+    broadcaster = asyncio.create_task(broadcast_flight_data())
+    await server.wait_closed()
+    broadcaster.cancel()
 
-# Run the publisher
+# Run the server
 if __name__ == "__main__":
     asyncio.run(main())
