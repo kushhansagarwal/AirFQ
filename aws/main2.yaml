@@ -11,12 +11,16 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
 
   WebSocketInstance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t2.micro
-      ImageId: ami-05572e392e80aee89 # Amazon Linux 2 AMI (update if needed)
+      InstanceType: t3.micro
+      ImageId: ami-05572e392e80aee89 # Amazon Linux 2 AMI (update if needed for your region)
       SecurityGroups:
         - !Ref WebSocketSecurityGroup
       UserData:
@@ -55,10 +59,10 @@ Resources:
           
           systemctl reload nginx
 
-          # Install a very basic WebSocket echo server (Node.js)
+          # Install Node.js and a basic WebSocket echo servers
           curl -sL https://rpm.nodesource.com/setup_18.x | bash -
           yum install -y nodejs
-          npm install -g ws
+          npm install -g "ws@^8.0.0"
 
           # First WebSocket server
           cat > /home/ec2-user/server1.js <<'EOF'
@@ -68,7 +72,7 @@ Resources:
           wss.on('connection', function connection(ws) {
             ws.on('message', function incoming(message) {
               console.log('received on server1: %s', message);
-              ws.send(`Echo from server1: ${message}`);
+              ws.send('Echo from server1: ' + message);
             });
             ws.send('Hello from server1!');
           });
@@ -82,7 +86,7 @@ Resources:
           wss.on('connection', function connection(ws) {
             ws.on('message', function incoming(message) {
               console.log('received on server2: %s', message);
-              ws.send(`Echo from server2: ${message}`);
+              ws.send('Echo from server2: ' + message);
             });
             ws.send('Hello from server2!');
           });
