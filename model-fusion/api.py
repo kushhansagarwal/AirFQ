@@ -7,7 +7,7 @@ import tempfile
 from werkzeug.utils import secure_filename
 from websockets.sync.client import connect
 import json
-
+import threading
 app = Flask(__name__)
 
 @app.after_request
@@ -153,7 +153,7 @@ def publish_to_channel(message):
 @app.route('/publish', methods=['POST'])
 def publish():
     """
-    Accepts JSON with 'data', and publishes 'data' to the hardcoded websocket channel.
+    Accepts JSON with 'data', and initiates publishing 'data' to the hardcoded websocket channel.
     Example input:
     {
         "data": { ... }
@@ -165,10 +165,10 @@ def publish():
         if data is None:
             return jsonify({'error': 'Missing data'}), 400
 
-        # Publish the data to the hardcoded channel
-        publish_to_channel(data)
+        # Initiate publishing the data to the hardcoded channel without waiting for completion
+        threading.Thread(target=publish_to_channel, args=(data,)).start()
 
-        return jsonify({'status': 'published', 'channel': HARDCODED_CHANNEL}), 200
+        return jsonify({'status': 'publishing initiated', 'channel': HARDCODED_CHANNEL}), 200
     except Exception as e:
         app.logger.error(f"Error in /publish: {str(e)}")
         return jsonify({'error': str(e)}), 500
