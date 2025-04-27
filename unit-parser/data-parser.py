@@ -12,7 +12,7 @@ from matplotlib.patches import Polygon
 
 # Parse command-line arguments with default values
 parser = argparse.ArgumentParser(description="Parse and plot flight data.")
-parser.add_argument('--input', default='taxi.csv', help="Input CSV filename (e.g., airspeed.csv)")
+parser.add_argument('--input', default='drive.csv', help="Input CSV filename (e.g., airspeed.csv)")
 parser.add_argument('--show-ksmo-cords', action='store_true', help="Print KSMO boundary coordinates and exit")
 args = parser.parse_args()
 
