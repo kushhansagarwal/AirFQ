@@ -12,6 +12,10 @@ A suite of tools to collect location, airspeed, humidity, temperature and other 
 
 How do I know this works? I tried it out in the air. Crazy? I was crazy once, They locked me in a room, a rubber room, a rubber room with rats, and rats make me crazy.
 
+### Drive Check
+I drove down the I-405, turning brifely onto the I-10 and returning back to UCLA.
+![Drive Check](/unit-parser/drive/maps_subplot.png)
+
 ### High Speed Taxi Check
 I requested a taxi from the hangar down the runway, reaching 70 knots and then slowing down to exit the runway.
 ![High Speed Taxi Check](/unit-parser/taxi/maps_subplot.png)
