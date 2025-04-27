@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
     import Map from './Map.svelte';
+	import { PUBLIC_TRAFFIC_URL } from '$env/static/public';
 	const { flightInfo } = $props();
 
 	let data: any = $state(null);
@@ -61,7 +62,7 @@
 	});
 
 	function connectWebSocket() {
-		socket = new WebSocket('ws://localhost:8765');
+		socket = new WebSocket(PUBLIC_TRAFFIC_URL);
 		socket.onmessage = (event) => {
 			const msg = JSON.parse(event.data);
 			if (msg.flightId === flightInfo.flightId) {

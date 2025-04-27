@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Chart from 'chart.js/auto';
+	import { PUBLIC_WS_URL } from '$env/static/public';
 
   type AirspeedData = {
     airspeed: number;
@@ -13,6 +14,9 @@
   let errorMessage = '';
   let chartCanvas: HTMLCanvasElement;
   let chart: Chart;
+
+  // Make x-axis max ticks limit configurable
+  export let xAxisMaxTicks: number = 100;
 
   onMount(() => {
     connectWebSocket();
@@ -48,7 +52,7 @@
         options: {
           responsive: true,
           animation: {
-            duration: 400 // Smooth animation
+            duration: 40 // Smooth animation
           },
           scales: {
             x: {
@@ -60,7 +64,7 @@
                 display: true,
                 callback: function() { return ''; }, // show only ticks, no numbers
                 autoSkip: true,
-                maxTicksLimit: 10
+                maxTicksLimit: xAxisMaxTicks
               },
               grid: {
                 display: true
@@ -88,7 +92,6 @@
       });
     }
   }
-
   function updateChart() {
     if (!chart) return;
 
@@ -105,7 +108,7 @@
   function connectWebSocket() {
     try {
       connectionStatus = 'Connecting...';
-      websocket = new WebSocket('wss://s14544.blr1.piesocket.com/v3/1?api_key=iJshgbsdZocGM142oxMQ3XxtKzAcfs9sru2aBVuH&notify_self=1');
+      websocket = new WebSocket(PUBLIC_WS_URL);
       
       websocket.onopen = () => {
         connectionStatus = 'Connected';
@@ -170,8 +173,7 @@
     </button>
   </div>
 
-  <div class="card bg-base-100 shadow-xl p-4">
-    <h2 class="text-xl font-semibold mb-4">Real-time Airspeed Chart</h2>
+  <div class="card bg-base-100 p-4">
     <div class="w-full">
       <canvas bind:this={chartCanvas}></canvas>
     </div>

@@ -17,7 +17,7 @@
 	<Nav />
 	<div class="flex flex-1">
 		<!-- Vertical navigation on the left -->
-		<div class="bg-base-100 w-64 shadow-md">
+		<div class="bg-base-200 w-64 shadow-md">
 			<ul class="menu p-4 w-full gap-2">
 				<li><button class={menu.selectedTab === 'Dashboard' ? 'active' : ''} onclick={() => (menu.selectedTab = 'Dashboard')}>Dashboard</button></li>
 				<li><button class={menu.selectedTab === 'Flights' ? 'active' : ''} onclick={() => (menu.selectedTab = 'Flights')}>Flights</button></li>
@@ -27,7 +27,7 @@
 			</ul>
 		</div>
 		<!-- Main content area that changes based on what's being displayed -->
-		<main class="bg-base-200 flex-1 p-6">
+		<main class="bg-base-100 flex-1 p-6">
 			{#if menu.selectedTab === 'Dashboard'}
 				<Dashboard />
 			{:else if menu.selectedTab === 'Flights'}
