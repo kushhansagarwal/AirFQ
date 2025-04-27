@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation to create an EC2 instance running Nginx for WebSocket proxy (ws only)
+
+Resources:
+  WebSocketSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP for WebSocket
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  WebSocketInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-05572e392e80aee89 # Amazon Linux 2 AMI (update if needed)
+      SecurityGroups:
+        - !Ref WebSocketSecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          amazon-linux-extras install nginx1 -y
+          systemctl enable nginx
+          systemctl start nginx
+          
+          # Setup a simple WebSocket proxy
+          cat > /etc/nginx/nginx.conf <<'EOF'
+          events {}
+          http {
+              server {
+                  listen 80;
+
+                  location /ws1 {
+                      proxy_pass http://localhost:3000;
+                      proxy_http_version 1.1;
+                      proxy_set_header Upgrade $http_upgrade;
+                      proxy_set_header Connection "Upgrade";
+                      proxy_set_header Host $host;
+                  }
+                  
+                  location /ws2 {
+                      proxy_pass http://localhost:3001;
+                      proxy_http_version 1.1;
+                      proxy_set_header Upgrade $http_upgrade;
+                      proxy_set_header Connection "Upgrade";
+                      proxy_set_header Host $host;
+                  }
+              }
+          }
+          EOF
+          
+          systemctl reload nginx
+
+          # Install a very basic WebSocket echo server (Node.js)
+          curl -sL https://rpm.nodesource.com/setup_18.x | bash -
+          yum install -y nodejs
+          npm install -g ws
+
+          # First WebSocket server
+          cat > /home/ec2-user/server1.js <<'EOF'
+          const WebSocket = require('ws');
+          const wss = new WebSocket.Server({ port: 3000 });
+
+          wss.on('connection', function connection(ws) {
+            ws.on('message', function incoming(message) {
+              console.log('received on server1: %s', message);
+              ws.send(`Echo from server1: ${message}`);
+            });
+            ws.send('Hello from server1!');
+          });
+          EOF
+
+          # Second WebSocket server
+          cat > /home/ec2-user/server2.js <<'EOF'
+          const WebSocket = require('ws');
+          const wss = new WebSocket.Server({ port: 3001 });
+
+          wss.on('connection', function connection(ws) {
+            ws.on('message', function incoming(message) {
+              console.log('received on server2: %s', message);
+              ws.send(`Echo from server2: ${message}`);
+            });
+            ws.send('Hello from server2!');
+          });
+          EOF
+
+          nohup node /home/ec2-user/server1.js &
+          nohup node /home/ec2-user/server2.js &
+
+Outputs:
+  InstancePublicDNS:
+    Description: Public DNS of the WebSocket Server
+    Value: !GetAtt WebSocketInstance.PublicDnsName
+
+  WebSocketURL1:
+    Description: Connect to WebSocket Server 1
+    Value: !Sub "ws://${WebSocketInstance.PublicDnsName}/ws1"
+
+  WebSocketURL2:
+    Description: Connect to WebSocket Server 2
+    Value: !Sub "ws://${WebSocketInstance.PublicDnsName}/ws2"
