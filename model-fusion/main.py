@@ -1,5 +1,13 @@
-import requests
 import os
+
+# Set MPLCONFIGDIR to a writable temp directory before importing matplotlib
+import tempfile
+mplconfigdir = os.environ.get("MPLCONFIGDIR")
+if not mplconfigdir:
+    temp_mpl_dir = tempfile.mkdtemp(prefix="mplconfigdir_")
+    os.environ["MPLCONFIGDIR"] = temp_mpl_dir
+
+import requests
 import matplotlib
 # Use Agg backend to avoid GUI issues when running in a non-main thread
 matplotlib.use('Agg')
