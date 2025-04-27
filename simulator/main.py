@@ -120,7 +120,7 @@ flight_generators = [
 ]
 
 async def publish_flight_data():
-    async with websockets.connect("wss://s14545.blr1.piesocket.com/v3/kushagarwal?api_key=SepclU8tJXXbpbaxs9WBSVjQQVwI7cKSTXXgjkfY") as ws:
+    async with websockets.connect("ws://ec2-54-189-248-53.us-west-2.compute.amazonaws.com/ws2") as ws:
         while True:
             # Generate data for all flights
             flight_data_list = [gen.generate_data() for gen in flight_generators]
