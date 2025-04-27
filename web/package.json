@@ -39,6 +39,7 @@
 	"dependencies": {
 		"@googlemaps/google-maps-services-js": "^3.4.1",
 		"@sveltejs/adapter-vercel": "^5.7.0",
+		"chart.js": "^4.4.9",
 		"daisyui": "^5.0.28"
 	}
 }
