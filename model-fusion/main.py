@@ -1,4 +1,9 @@
 import os
+import uuid
+import boto3
+from datetime import datetime
+import tempfile
+import logging
 
 # Set MPLCONFIGDIR to a writable temp directory before importing matplotlib
 import tempfile
@@ -452,6 +457,74 @@ def generate_wind_plots_augmented(departure_icao, arrival_icao, levels, output_d
         )
         plot_files.append(plot_file)
     return plot_files
+
+def get_s3_client():
+    return boto3.client(
+        's3',
+        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        region_name=os.environ.get('AWS_REGION', 'us-west-2')
+    )
+
+S3_BUCKET = os.environ.get('S3_BUCKET', 'airfq')
+S3_REGION = os.environ.get('AWS_REGION', 'us-west-2')
+
+# --- S3 upload helper ---
+def upload_file_to_s3(file_path, bucket=S3_BUCKET, region=S3_REGION, object_name=None):
+    s3 = get_s3_client()
+    if object_name is None:
+        timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        random_id = str(uuid.uuid4())[:8]
+        object_name = f"wind-plots/{timestamp}-{random_id}-{os.path.basename(file_path)}"
+    try:
+        s3.upload_file(
+            file_path, bucket, object_name,
+            ExtraArgs={
+                'ContentType': 'image/png',
+                'ContentDisposition': 'inline'
+            }
+        )
+        url = f"https://{bucket}.s3.{region}.amazonaws.com/{object_name}"
+        return url
+    except Exception as e:
+        logging.error(f"Error uploading to S3: {str(e)}")
+        raise
+
+# --- Main API helpers ---
+def generate_and_upload_wind_plot(
+    departure, arrival, level, magnitude_factor=None, angle_factor=None, low_res=True, augmented=False
+):
+    """
+    Generate a wind plot, upload to S3, delete temp file, and return the S3 URL.
+    """
+    max_pixels = 600 if low_res else 2000
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            if augmented:
+                if magnitude_factor is None:
+                    magnitude_factor = 1.5
+                if angle_factor is None:
+                    angle_factor = 0.5
+                plot_files = generate_wind_plots_augmented(
+                    departure, arrival, [level], temp_dir, magnitude_factor, angle_factor, max_pixels=max_pixels
+                )
+            else:
+                plot_files = generate_wind_plots(
+                    departure, arrival, [level], temp_dir, max_pixels=max_pixels
+                )
+            if not plot_files or not os.path.exists(plot_files[0]):
+                raise RuntimeError('Failed to generate wind plot')
+            plot_file = plot_files[0]
+            s3_url = upload_file_to_s3(plot_file)
+            # Delete the file explicitly (though temp_dir will be cleaned up)
+            try:
+                os.remove(plot_file)
+            except Exception:
+                pass
+            return s3_url
+        except Exception as e:
+            logging.error(f"Error in generate_and_upload_wind_plot: {e}")
+            raise
 
 if __name__ == '__main__':
     departure = "KSMO"

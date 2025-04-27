@@ -10,6 +10,7 @@
 	let selectedLevelIdx: number = 0;
 	const levels = ['sfc', '030', '060', '090'];
 	let isDone = false;
+	let showMode: 'normal' | 'augmented' = 'normal';
 
 	// imageData[level] = { normal: string|null, augmented: string|null }
 	let imageData: Record<string, { normal: string | null; augmented: string | null }> = {
@@ -46,40 +47,46 @@
 		errorMessage = '';
 		isLoading = true;
 		imageData[level] = { normal: null, augmented: null };
-
 		try {
-			const [normalRes, augmentedRes] = await Promise.all([
-				fetch(`${PUBLIC_PY_API}/wind-data`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						departure: departureAirport,
-						arrival: arrivalAirport,
-						level
-					})
-				}),
-				fetch(`${PUBLIC_PY_API}/wind-data-augmented`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						departure: departureAirport,
-						arrival: arrivalAirport,
-						level
-					})
+			// Fetch normal wind data first
+			const normalRes = await fetch(`${PUBLIC_PY_API}/wind-data`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					departure: departureAirport,
+					arrival: arrivalAirport,
+					level
 				})
-			]);
+			});
 
-			if (!normalRes.ok || !augmentedRes.ok) {
-				throw new Error('Failed to fetch wind data');
+			if (!normalRes.ok) {
+				throw new Error('Failed to fetch normal wind data');
 			}
 
-			const [normalImage, augmentedImage] = await Promise.all([normalRes.text(), augmentedRes.text()]);
+			const normalData = await normalRes.json();
+
+			// Then fetch augmented wind data
+			const augmentedRes = await fetch(`${PUBLIC_PY_API}/wind-data-augmented`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					departure: departureAirport,
+					arrival: arrivalAirport,
+					level
+				})
+			});
+
+			if (!augmentedRes.ok) {
+				throw new Error('Failed to fetch augmented wind data');
+			}
+
+			const augmentedData = await augmentedRes.json();
 
 			imageData = {
 				...imageData,
 				[level]: {
-					normal: normalImage,
-					augmented: augmentedImage
+					normal: normalData.url || null,
+					augmented: augmentedData.url || null
 				}
 			};
 			isDone = true;
@@ -126,7 +133,7 @@
 <div class="flex flex-col gap-6">
 	<h1 class="text-4xl font-bold">Flight Route Wind Plot</h1>
 
-	<div class="h-full">
+	<div class="h-full grid gap-4">
 		<div class="flex flex-col gap-4 md:flex-row">
 			<label class="form-control w-full max-w-xs">
 				<span class="label-text">Departure Airport</span>
@@ -207,47 +214,73 @@
 		{/if}
 
 		{#if isDone}
-			<div class="card bg-base-100 shadow-xl">
-				<!-- Route display at top -->
-				<div class="bg-base-200 flex items-center justify-between rounded-t-xl p-4">
-					<div class="w-32 text-center">
-						<div class="text-2xl font-bold">{departureAirport}</div>
-						<div class="text-base-content/70 text-xs">{getAirportFullName(departureAirport)}</div>
-					</div>
-					<div class="relative flex flex-1 flex-col items-center">
-						<div
-							class="bg-base-300 absolute top-1/2 left-0 h-1 w-full"
-							style="transform: translateY(-50%);"
-						></div>
-						<div class="bg-base-200 z-10 px-2">
-							<img src="/flight.svg" alt="Plane" width="40" height="40" />
+			<div class="flex">
+				<!-- Left sidebar with route info and controls -->
+				<div class="w-64 bg-base-200 p-4 rounded-l-xl flex flex-col gap-4">
+					<!-- Route display -->
+					<div class="flex flex-col gap-2">
+						<h3 class="font-bold text-lg">Flight Route</h3>
+						<div class="flex flex-col gap-1">
+							<div class="flex items-center gap-2">
+								<span class="font-semibold">From:</span>
+								<div>
+									<div class="font-bold">{departureAirport}</div>
+									<div class="text-base-content/70 text-xs">{getAirportFullName(departureAirport)}</div>
+								</div>
+							</div>
+							<div class="flex items-center gap-2">
+								<span class="font-semibold">To:</span>
+								<div>
+									<div class="font-bold">{arrivalAirport}</div>
+									<div class="text-base-content/70 text-xs">{getAirportFullName(arrivalAirport)}</div>
+								</div>
+							</div>
 						</div>
 					</div>
-					<div class="w-32 text-center">
-						<div class="text-2xl font-bold">{arrivalAirport}</div>
-						<div class="text-base-content/70 text-xs">{getAirportFullName(arrivalAirport)}</div>
+
+					<!-- Flight level tabs -->
+					<div class="flex flex-col gap-2">
+						<h3 class="font-bold text-lg">Flight Level</h3>
+						<div class="tabs tabs-boxed flex flex-wrap">
+							{#each levels as level, idx}
+								<button
+									class="tab {selectedLevelIdx === idx ? 'tab-active' : ''}"
+									on:click={() => handleLevelChange(idx)}
+								>
+									FL {level}
+								</button>
+							{/each}
+						</div>
+					</div>
+
+					<!-- Display mode selector -->
+					<div class="flex flex-col gap-2">
+						<h3 class="font-bold text-lg">View</h3>
+						<div class="btn-group">
+							<button
+								class="btn {showMode === 'normal' ? 'btn-active' : ''}"
+								on:click={() => (showMode = 'normal')}
+							>
+								Normal
+							</button>
+							<button
+								class="btn {showMode === 'augmented' ? 'btn-active' : ''}"
+								on:click={() => (showMode = 'augmented')}
+							>
+								Augmented
+							</button>
+						</div>
 					</div>
 				</div>
 
-				<WindMapDisplay 
-					{levels}
-					svgData={imageData}
-					{isLoading}
-					{selectedLevelIdx}
-					on:levelChange={(e: CustomEvent<number>) => handleLevelChange(e.detail)} 
-				/>
-
-				<div class="card-body">
-					<h2 class="card-title">
-						Wind Plot: {departureAirport} to {arrivalAirport} (FL {levels[selectedLevelIdx]})
-					</h2>
-					<p>
-						View wind patterns for your selected route and flight level.<br />
-						Switch between normal and augmented views using the buttons above.
-					</p>
-					<div class="card-actions justify-end">
-						<button class="btn btn-secondary" on:click={resetForm}>New Search</button>
-					</div>
+				<!-- Wind map display -->
+				<div class="flex-1 bg-base-100 p-4 rounded-r-xl">
+					<WindMapDisplay
+						normalUrl={imageData[levels[selectedLevelIdx]]?.normal}
+						augmentedUrl={imageData[levels[selectedLevelIdx]]?.augmented}
+						showMode={showMode}
+						isLoading={isLoading}
+					/>
 				</div>
 			</div>
 		{/if}
