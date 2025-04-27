@@ -1,0 +1,71 @@
+- !<AssetImportMetadata/a6c69cf3-0a8b-4fc5-aeee-562f45148cdf>
+  ImportedAssetIds:
+    JavaScriptAsset: !<reference> 9e30b292-ef11-4a29-a90c-65f0272785bd
+  ImporterName: JavaScriptAssetImporter
+  PrimaryAsset: !<reference> 9e30b292-ef11-4a29-a90c-65f0272785bd
+  PackageType: NotAPackage
+  PackagePolicy: CannotBeUnpacked
+  ExtraData:
+    {}
+  AssetDataMap:
+    JavaScriptAsset: !<own> b22cebb3-6a27-483d-8640-53ab33c766c9
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<ScriptAssetData/b22cebb3-6a27-483d-8640-53ab33c766c9>
+  SvgIcon: ""
+  Description: ""
+  InternalVersion: 0
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  ComponentUid: 0125758d-79a2-4b8f-9e6b-02abaf886a5b
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  CurrentVisibility: Editable
+  MaxVisibility: Editable
+  ScriptInputsHidden:
+    additive: false
+    colorProperty: false
+    delay: false
+    easingFunction: false
+    easingType: false
+    end: false
+    from: false
+    ignoreAlpha: false
+    loopType: false
+    movementType: false
+    offset: false
+    playAutomatically: false
+    recursive: false
+    sceneObjectReference: false
+    start: false
+    time: false
+    to: false
+    tweenName: false
+  ScriptTypesHidden:
+    {}
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  DefaultScriptInputs:
+    - sceneObjectReference: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      tweenName: ""
+      playAutomatically: true
+      loopType: 0
+      movementType: 0
+      colorProperty: 0
+      start: !<Vec4> {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+      end: !<Vec4> {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+      to: !<Vec4> {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+      from: !<Vec4> {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+      offset: !<Vec4> {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+      additive: false
+      recursive: false
+      ignoreAlpha: false
+      time: !<float> 1.000000
+      delay: !<float> 0.000000
+      easingFunction: Quadratic
+      easingType: Out
+  ScriptTypes:
+    -
+      {}

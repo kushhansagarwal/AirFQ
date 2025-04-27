@@ -1,0 +1,54 @@
+- !<ObjectPrefab/2a49be4c-8c6c-48f5-a760-a719612a0196>
+  PackagePath: ""
+  objects:
+    - !<own> d71a54a4-b3ff-4384-9a4e-4ba64a4adf71
+  LazyLoading: false
+  RetainAssets: true
+- !<ScriptComponent/03fdf61e-0fbf-4d74-8e8f-87db1ffe02bf>
+  PrefabRemaps:
+    []
+  Name: TweenManager
+  Enabled: true
+  ScriptAsset: !<reference> 0d7edfc4-532a-4234-a448-3592ae890958
+  ScriptInputsDefault:
+    printDebugLog: true
+  ScriptTypesDefault:
+    {}
+  ScriptInputs:
+    "":
+      printDebugLog: false
+  ScriptTypes:
+    "":
+      {}
+- !<ScriptComponent/18182cf9-b5f5-4bd9-a01d-2b205f211607>
+  PrefabRemaps:
+    []
+  Name: Tween
+  Enabled: true
+  ScriptAsset: !<reference> 6df60e3c-9aa0-4b8b-9506-6d2027bc5acf
+  ScriptInputsDefault:
+    {}
+  ScriptTypesDefault:
+    {}
+  ScriptInputs:
+    "":
+      {}
+  ScriptTypes:
+    "":
+      {}
+- !<SceneObject/d71a54a4-b3ff-4384-9a4e-4ba64a4adf71>
+  PrefabRemaps:
+    []
+  Name: TweenManager
+  Enabled: true
+  Layers: 1
+  LocalTransform:
+    position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    hasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 18182cf9-b5f5-4bd9-a01d-2b205f211607
+    - !<own> 03fdf61e-0fbf-4d74-8e8f-87db1ffe02bf

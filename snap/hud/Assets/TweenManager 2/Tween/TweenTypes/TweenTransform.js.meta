@@ -1,0 +1,69 @@
+- !<AssetImportMetadata/3644cd70-53c6-415b-8f6d-d04ecb0b4dfc>
+  ImportedAssetIds:
+    JavaScriptAsset: !<reference> 16ef1cb5-f7bb-49a3-ada6-55680148d71d
+  ImporterName: JavaScriptAssetImporter
+  PrimaryAsset: !<reference> 16ef1cb5-f7bb-49a3-ada6-55680148d71d
+  PackageType: NotAPackage
+  PackagePolicy: CannotBeUnpacked
+  ExtraData:
+    {}
+  AssetDataMap:
+    JavaScriptAsset: !<own> 5ab10f96-8ac2-4b29-b4d2-2a993e566c44
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<ScriptAssetData/5ab10f96-8ac2-4b29-b4d2-2a993e566c44>
+  SvgIcon: ""
+  Description: ""
+  InternalVersion: 0
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  ComponentUid: 72e7a675-1816-44ba-8707-bf4091d19958
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  CurrentVisibility: Editable
+  MaxVisibility: Editable
+  ScriptInputsHidden:
+    additive: false
+    delay: false
+    easingFunction: false
+    easingType: false
+    end: false
+    from: false
+    isLocal: false
+    loopType: false
+    movementType: false
+    offset: false
+    playAutomatically: false
+    sceneObjectReference: false
+    start: false
+    time: false
+    to: false
+    tweenName: false
+    type: false
+  ScriptTypesHidden:
+    {}
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  DefaultScriptInputs:
+    - sceneObjectReference: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      tweenName: ""
+      playAutomatically: true
+      loopType: 0
+      type: 0
+      movementType: 0
+      start: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      end: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      from: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      to: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      offset: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      additive: false
+      time: !<float> 1.000000
+      delay: !<float> 0.000000
+      isLocal: true
+      easingFunction: Quadratic
+      easingType: Out
+  ScriptTypes:
+    -
+      {}

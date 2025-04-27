@@ -1,0 +1,50 @@
+- !<AssetImportMetadata/68b0415f-87f5-48d7-91e4-900f3f56aeca>
+  ImportedAssetIds:
+    JavaScriptAsset: !<reference> 978ee664-5258-4b57-890b-d6bee0bf43a9
+  ImporterName: JavaScriptAssetImporter
+  PrimaryAsset: !<reference> 978ee664-5258-4b57-890b-d6bee0bf43a9
+  PackageType: NotAPackage
+  PackagePolicy: CannotBeUnpacked
+  ExtraData:
+    {}
+  AssetDataMap:
+    JavaScriptAsset: !<own> 8b7fd172-c5b7-4e1d-badd-3663efe7fb5f
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<ScriptAssetData/8b7fd172-c5b7-4e1d-badd-3663efe7fb5f>
+  SvgIcon: ""
+  Description: ""
+  InternalVersion: 0
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  ComponentUid: 15c370ad-e57a-4a54-aa10-36b8505be51b
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  CurrentVisibility: Editable
+  MaxVisibility: Editable
+  ScriptInputsHidden:
+    loopType: false
+    playAll: false
+    playAutomatically: false
+    recursive: false
+    sceneObjectReference: false
+    tweenName: false
+    tweenNames: false
+  ScriptTypesHidden:
+    {}
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  DefaultScriptInputs:
+    - tweenName: ""
+      playAutomatically: true
+      loopType: 0
+      sceneObjectReference: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      playAll: false
+      recursive: false
+      tweenNames: !<string[]>
+        []
+  ScriptTypes:
+    -
+      {}
