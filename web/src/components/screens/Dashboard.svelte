@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { PUBLIC_PY_API } from "$env/static/public";
+
   let departureAirport = '';
   let arrivalAirport = '';
   let isLoading = false;
@@ -31,7 +33,7 @@
     svgData[level] = null;
 
     try {
-      const response = await fetch('http://127.0.0.1:3001/wind-data-augmented', {
+      const response = await fetch(`${PUBLIC_PY_API}/wind-data-augmented`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
