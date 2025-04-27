@@ -84,55 +84,58 @@ while not calibrated:
         print("Calibration error:", e)
     time.sleep(0.1)
 
-# --- Batch send after 30 samples, as fast as possible ---
+# --- Batch send after 10 samples ---
 batch = []
+sample_interval = 0.1  # 100 ms (in seconds)
+last_sample_time = time.ticks_ms()  # Millisecond counter
 
 # Initialize timestamp relative to start
 t_start = time.ticks_ms()
 
 while True:
-    # Always update GPS parser (not strictly needed for airspeed, but keep for completeness)
-    while gps_serial.any():
-        c = gps_serial.read(1)
-        if c:
-            my_gps.update(chr(c[0]))
-
-    try:
-        pitot_data = i2c.readfrom(PITOT_ADDR, 4)
-        pressure_raw, temp_raw = parse_pitot_data(pitot_data)
-        pitot_pa = raw_to_pressure_pa(pressure_raw) if pressure_raw is not None else None
-        if pitot_pa is not None:
-            pitot_pa -= zero_offset
-        airspeed = airspeed_from_pressures(pitot_pa) if pitot_pa is not None else None
-    except Exception as e:
-        print("Pitot read error:", e)
-        airspeed = None
-
-    # Record timestamp relative to start (ms)
     now = time.ticks_ms()
-    timestamp = time.ticks_diff(now, t_start)
 
-    batch.append({
-        "timestamp": timestamp,
-        "airspeed": airspeed if airspeed is not None else ""
-    })
+    # Sample exactly every 100 ms
+    if time.ticks_diff(now, last_sample_time) >= int(sample_interval * 1000):
+        # Always update GPS parser
+        while gps_serial.any():
+            c = gps_serial.read(1)
+            if c:
+                my_gps.update(chr(c[0]))
 
-    # Print every 15 datapoints
-    if len(batch) % 15 == 0:
-        print("Collected {} datapoints".format(len(batch)))
+        try:
+            pitot_data = i2c.readfrom(PITOT_ADDR, 4)
+            pressure_raw, temp_raw = parse_pitot_data(pitot_data)
+            pitot_pa = raw_to_pressure_pa(pressure_raw) if pressure_raw is not None else None
+            if pitot_pa is not None:
+                pitot_pa -= zero_offset
+            airspeed = airspeed_from_pressures(pitot_pa) if pitot_pa is not None else None
+        except Exception as e:
+            print("Pitot read error:", e)
+            airspeed = None
 
-    # Send batch when we have 30 samples
-    if len(batch) >= 30:
+        # Record timestamp relative to start (ms)
+        timestamp = time.ticks_diff(now, t_start)
+
+        batch.append({
+            "timestamp": timestamp,
+            "airspeed": airspeed if airspeed is not None else ""
+        })
+
+        last_sample_time = now  # Update last sample time
+
+    # Send batch when we have 10 samples
+    if len(batch) >= 10:
         data = {"data": batch}
         try:
             resp = urequests.post(url, json=data)
             resp.close()
             del resp
-            print("Sent batch of 30 readings")
+            print("Sent batch of 10 readings")
         except Exception as e:
             print("POST error:", e)
 
         batch = []  # Clear batch after sending
         gc.collect()
 
-    time.sleep(0.001)  # Tiny sleep to avoid busy waiting, but as fast as possible
+    time.sleep(0.005)  # Tiny sleep to avoid busy waiting

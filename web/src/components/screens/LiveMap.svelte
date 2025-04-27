@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { PUBLIC_TRAFFIC_URL } from '$env/static/public';
 	import { onMount } from 'svelte';
 	let flights: Record<string, any> = {};
 
@@ -125,7 +126,7 @@
 	function connectWS() {
 		// Only connect if running in the browser
 		if (typeof window === 'undefined') return;
-		const ws = new WebSocket("ws://localhost:8765");
+		const ws = new WebSocket(PUBLIC_TRAFFIC_URL);
 		ws.onmessage = (event) => {
 			try {
 				const data = JSON.parse(event.data);
