@@ -131,7 +131,7 @@ def get_wind_data_augmented():
         return jsonify({'error': str(e)}), 500
 
 # Hardcoded WebSocket channel
-HARDCODED_CHANNEL = "wss://s14544.blr1.piesocket.com/v3/1?api_key=iJshgbsdZocGM142oxMQ3XxtKzAcfs9sru2aBVuH&notify_self=1"
+HARDCODED_CHANNEL = "wss://s14544.blr1.piesocket.com/v3/kushagarwal?api_key=iJshgbsdZocGM142oxMQ3XxtKzAcfs9sru2aBVuH"
 
 def publish_to_channel(message):
     # Send the message to the hardcoded websocket channel using websockets.sync.client.connect

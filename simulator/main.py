@@ -6,11 +6,6 @@ import time
 import math
 from datetime import datetime
 
-# Configuration for the WebSocket server
-WS_URL = "wss://s14545.blr1.piesocket.com/v3/1"
-API_KEY = "SepclU8tJXXbpbaxs9WBSVjQQVwI7cKSTXXgjkfY"
-NOTIFY_SELF = "1"
-
 # Flight data generator
 class FlightDataGenerator:
     def __init__(self, flight_id=None, lat=None, lon=None):
@@ -125,7 +120,7 @@ flight_generators = [
 ]
 
 async def publish_flight_data():
-    async with websockets.connect(f"{WS_URL}?api_key={API_KEY}&notify_self={NOTIFY_SELF}") as ws:
+    async with websockets.connect("wss://s14545.blr1.piesocket.com/v3/kushagarwal?api_key=SepclU8tJXXbpbaxs9WBSVjQQVwI7cKSTXXgjkfY") as ws:
         while True:
             # Generate data for all flights
             flight_data_list = [gen.generate_data() for gen in flight_generators]
