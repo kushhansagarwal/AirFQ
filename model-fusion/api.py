@@ -1,8 +1,12 @@
+#!/usr/bin/env python
+
 from flask import Flask, request, jsonify, send_file, make_response
 import os
 from main import generate_wind_plots, generate_wind_plots_augmented
 import tempfile
 from werkzeug.utils import secure_filename
+from websockets.sync.client import connect
+import json
 
 app = Flask(__name__)
 
@@ -124,6 +128,49 @@ def get_wind_data_augmented():
             return response
 
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Hardcoded WebSocket channel
+HARDCODED_CHANNEL = "wss://s14544.blr1.piesocket.com/v3/1?api_key=iJshgbsdZocGM142oxMQ3XxtKzAcfs9sru2aBVuH&notify_self=1"
+
+def publish_to_channel(message):
+    # Send the message to the hardcoded websocket channel using websockets.sync.client.connect
+    try:
+        # Convert message to JSON string if it's not already a string
+        if not isinstance(message, str):
+            message = json.dumps(message)
+        with connect(HARDCODED_CHANNEL) as websocket:
+            websocket.send(message)
+            # Optionally, receive a response (not required, but for demonstration)
+            try:
+                response = websocket.recv()
+                print(f"Received from WS: {response}")
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"Error sending message to websocket: {e}")
+
+@app.route('/publish', methods=['POST'])
+def publish():
+    """
+    Accepts JSON with 'data', and publishes 'data' to the hardcoded websocket channel.
+    Example input:
+    {
+        "data": { ... }
+    }
+    """
+    try:
+        payload = request.get_json(force=True)
+        data = payload.get('data')
+        if data is None:
+            return jsonify({'error': 'Missing data'}), 400
+
+        # Publish the data to the hardcoded channel
+        publish_to_channel(data)
+
+        return jsonify({'status': 'published', 'channel': HARDCODED_CHANNEL}), 200
+    except Exception as e:
+        app.logger.error(f"Error in /publish: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/', methods=['GET'])
