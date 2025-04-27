@@ -12,7 +12,7 @@ from matplotlib.patches import Polygon
 
 # Parse command-line arguments with default values
 parser = argparse.ArgumentParser(description="Parse and plot flight data.")
-parser.add_argument('--input', default='flight.csv', help="Input CSV filename (e.g., airspeed.csv)")
+parser.add_argument('--input', default='taxi.csv', help="Input CSV filename (e.g., airspeed.csv)")
 parser.add_argument('--show-ksmo-cords', action='store_true', help="Print KSMO boundary coordinates and exit")
 args = parser.parse_args()
 
@@ -613,8 +613,12 @@ def plot_airport_boundary(ax, multipolygon_coords, color='white', linewidth=1, a
             ax.add_patch(polygon)
 
 # Plot maps with heatmaps and high-resolution terrain basemaps with opacity
-def plot_map(df, column, title, cmap, outdir, show_airport=True):
-    fig, ax = plt.subplots(figsize=(12,12))
+def plot_map(df, column, title, cmap, outdir, show_airport=True, ax=None):
+    # If ax is None, create a new figure and axis
+    close_fig = False
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12,12))
+        close_fig = True
     points = np.array([df['longitude'], df['latitude']]).T.reshape(-1,1,2)
     segments = np.concatenate([points[:-1], points[1:]], axis=1)
     norm = Normalize(vmin=df[column].min(), vmax=df[column].max())
@@ -638,14 +642,28 @@ def plot_map(df, column, title, cmap, outdir, show_airport=True):
     # Show KSMO boundary if requested
     if show_airport:
         plot_airport_boundary(ax, ksmo_boundary_coords)
-    plt.colorbar(lc, ax=ax, label=column)
-    plt.title(title)
-    outpath = os.path.join(outdir, f'{title.replace(" ", "_").lower()}.png')
-    plt.savefig(outpath, dpi=300)
-    plt.close(fig)
+    cbar = plt.colorbar(lc, ax=ax, label=column)
+    ax.set_title(title)
+    if close_fig:
+        outpath = os.path.join(outdir, f'{title.replace(" ", "_").lower()}.png')
+        plt.savefig(outpath, dpi=300)
+        plt.close(fig)
+    return ax
 
+# Save individual maps
 plot_map(df, 'elevation', 'GPS Track with Elevation', 'terrain', outdir)
 plot_map(df, 'airspeed', 'GPS Track with Airspeed', 'viridis', outdir)
+
+# Save a subplot with both maps
+fig, axes = plt.subplots(1, 2, figsize=(22, 12))
+plot_map(df, 'elevation', 'GPS Track with Elevation', 'terrain', outdir, ax=axes[0])
+plot_map(df, 'airspeed', 'GPS Track with Airspeed', 'viridis', outdir, ax=axes[1])
+axes[0].set_title('GPS Track with Elevation')
+axes[1].set_title('GPS Track with Airspeed')
+plt.tight_layout()
+outpath = os.path.join(outdir, 'maps_subplot.png')
+plt.savefig(outpath, dpi=300)
+plt.close(fig)
 
 # Plot speed and heading over time
 fig, ax1 = plt.subplots(figsize=(14,6))
