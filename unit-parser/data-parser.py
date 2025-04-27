@@ -12,7 +12,7 @@ from matplotlib.patches import Polygon
 
 # Parse command-line arguments with default values
 parser = argparse.ArgumentParser(description="Parse and plot flight data.")
-parser.add_argument('--input', default='drive.csv', help="Input CSV filename (e.g., airspeed.csv)")
+parser.add_argument('--input', default='flight.csv', help="Input CSV filename (e.g., airspeed.csv)")
 parser.add_argument('--show-ksmo-cords', action='store_true', help="Print KSMO boundary coordinates and exit")
 args = parser.parse_args()
 
@@ -537,7 +537,7 @@ if args.show_ksmo_cords:
     exit(0)
 
 # Read CSV files
-df = pd.read_csv(input_csv).dropna(subset=['latitude', 'longitude'])
+df = pd.read_csv(input_csv).dropna(subset=['latitude', 'longitude', 'airspeed'])
 
 # Convert types
 df[['latitude', 'longitude', 'elevation', 'airspeed']] = df[['latitude', 'longitude', 'elevation', 'airspeed']].astype(float)
@@ -571,16 +571,17 @@ track_rad = np.arctan2(
 )
 track_deg = np.degrees(track_rad)
 # Wrap to [-180, 180]
-track_deg_wrapped = ((track_deg + 180) % 360) - 180
+track_deg_wrapped = ((track_deg + 180) % 360) + 360
 gps_df['track_deg'] = track_deg_wrapped
 
 gps_df_clean = gps_df.dropna(subset=['ground_speed_mps', 'track_deg'])
+
 gps_df_clean[['timestamp', 'ground_speed_mps', 'track_deg']].to_csv(os.path.join(outdir, 'ground_speed_track.csv'), index=False)
 
 # CSV with millisecond timestamps, airspeed, and elevation
 df[['timestamp', 'airspeed', 'elevation']].to_csv(os.path.join(outdir, 'airspeed_elevation.csv'), index=False)
 
-# Rolling average (5-second batch)
+# Rolling average (5-second batch) for ground speed
 gps_df_clean['ground_speed_avg'] = gps_df_clean['ground_speed_mps'].rolling(window=5, min_periods=1).mean()
 
 # For track, use circular mean so that wraparound at 180/-180 is handled correctly
@@ -590,6 +591,10 @@ def circular_mean_deg(series):
     return np.rad2deg(mean_angle)
 
 gps_df_clean['track_avg'] = gps_df_clean['track_deg'].rolling(window=5, min_periods=1).apply(circular_mean_deg, raw=False)
+
+# Clean airspeed for time series plot: drop NaN, use rolling average of previous 15 timestamps
+airspeed_clean = df[['timestamp', 'airspeed']].dropna(subset=['airspeed']).copy()
+airspeed_clean['airspeed_avg'] = airspeed_clean['airspeed'].rolling(window=15, min_periods=1).mean()
 
 # Function to estimate zoom level based on lat/lon width
 def estimate_zoom_level(lat_min, lat_max, lon_min, lon_max):
@@ -665,10 +670,28 @@ outpath = os.path.join(outdir, 'maps_subplot.png')
 plt.savefig(outpath, dpi=300)
 plt.close(fig)
 
-# Plot speed and heading over time
+# Plot speed, heading, and (airspeed - ground speed) over time (with mean offset removed)
 fig, ax1 = plt.subplots(figsize=(14,6))
-ax1.plot(df['timestamp'], df['airspeed'], label='Airspeed', color='blue')
+ax1.plot(airspeed_clean['timestamp'], airspeed_clean['airspeed_avg'], label='Airspeed (15-sample avg)', color='blue')
 ax1.plot(gps_df_clean['timestamp'], gps_df_clean['ground_speed_avg'], label='Ground Speed Avg', color='green')
+
+# Compute the difference between airspeed and ground speed, align on timestamp
+# Interpolate ground speed to airspeed timestamps for difference
+ground_speed_interp = np.interp(
+    pd.to_numeric(airspeed_clean['timestamp']),
+    pd.to_numeric(gps_df_clean['timestamp']),
+    gps_df_clean['ground_speed_avg']
+)
+airspeed_minus_ground = airspeed_clean['airspeed_avg'] - ground_speed_interp
+airspeed_minus_ground_demeaned = airspeed_minus_ground - np.mean(airspeed_minus_ground)
+ax1.plot(
+    airspeed_clean['timestamp'],
+    airspeed_minus_ground_demeaned,
+    label='Airspeed - Ground Speed (demeaned)',
+    color='purple',
+    linestyle=':'
+)
+
 ax1.set_xlabel('Time')
 ax1.set_ylabel('Speed (m/s)')
 ax1.legend(loc='upper left')
@@ -678,7 +701,7 @@ ax2.plot(gps_df_clean['timestamp'], gps_df_clean['track_avg'], color='red', line
 ax2.set_ylabel('Track (degrees, centered at 0)')
 ax2.legend(loc='upper right')
 
-plt.title('Airspeed, Ground Speed (Avg), and Track (Avg, Centered at 0) Over Time')
+plt.title('Airspeed (15-sample avg), Ground Speed (Avg), Track (Avg), and Airspeed-GroundSpeed (demeaned) Over Time')
 plt.grid(True)
 plt.tight_layout()
 outpath = os.path.join(outdir, 'speed_and_track_over_time.png')
