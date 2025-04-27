@@ -1,0 +1,39 @@
+- !<AssetImportMetadata/d60c9e78-e941-4c71-a52d-4cb693b95ad0>
+  ImportedAssetIds:
+    TypeScriptAsset: !<reference> ff1652bb-a085-41dd-8248-5e4f801ba210
+  ImporterName: TypeScriptAssetImporter
+  PrimaryAsset: !<reference> ff1652bb-a085-41dd-8248-5e4f801ba210
+  PackageType: NotAPackage
+  PackagePolicy: CannotBeUnpacked
+  ExtraData:
+    {}
+  AssetDataMap:
+    TypeScriptAsset: !<own> 2cf688da-c1ac-40ee-9a99-2965258de228
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<TypeScriptAssetData/2cf688da-c1ac-40ee-9a99-2965258de228>
+  SvgIcon: ""
+  Description: ""
+  InternalVersion: 0
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  ComponentUid: 05e1176d-9609-4b62-a25e-d9fbfd7b10c5
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  CurrentVisibility: Editable
+  MaxVisibility: Editable
+  ScriptInputsHidden:
+    remoteServiceModule: false
+  ScriptTypesHidden:
+    {}
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  DefaultScriptInputs:
+    - remoteServiceModule: !<reference.RemoteServiceModule> 00000000-0000-0000-0000-000000000000
+  ScriptTypes:
+    -
+      {}
+  InputLines:
+    - // @input Asset.RemoteServiceModule remoteServiceModule

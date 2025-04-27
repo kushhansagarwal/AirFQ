@@ -110,9 +110,7 @@ class FlightDataGenerator:
             "speedFactor": self.speed_factor,  # Include the new metric in the output
             "timestamp": int(time.time() * 1000),
             "lat": self.lat,
-            "lon": self.lon,
-            "imageFormat": "png",  # Specify high resolution PNG format instead of SVG
-            "imageResolution": "high"  # Specify high resolution for the image
+            "lon": self.lon
         }
 
 # --- GLOBALS for broadcasting ---
